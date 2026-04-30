@@ -441,6 +441,16 @@
       m.on("click", () => openDrawer(r.household_id));
       state.markerLayer.addLayer(m);
     });
+    if (state.firstLoad) {
+      const pins = state.visibleSet.filter(r => r.lat && r.lng);
+      if (pins.length >= 2) {
+        const lats = pins.map(p => p.lat), lngs = pins.map(p => p.lng);
+        state.map.fitBounds(
+          [[Math.min(...lats), Math.min(...lngs)], [Math.max(...lats), Math.max(...lngs)]],
+          { padding: [40, 40], maxZoom: 16 }
+        );
+      }
+    }
     state.firstLoad = false;
     $("#visibleCount").textContent = `${state.visibleSet.length.toLocaleString()} households visible`;
   }
