@@ -47,7 +47,7 @@
     activeTagFilter: null,   // tag id, when filtering by a tag
     lastClickedIdx: -1,
     filters: {
-      tiers: { T1: true, T2: true, T3: true, T4: false, T5: false },
+      tiers: { T1: true, T2: true, T3: false, T4: false, T5: false },
       cohorts: new Set(),
       minValue: null, maxValue: null,
       minYears: null, maxYears: null,
@@ -480,7 +480,7 @@
     return (av - bv) * sgn;
   }
 
-  const TIER_LABEL = { T1: "Current senior", T2: "Recent grad", T3: "Likely senior",
+  const TIER_LABEL = { T1: "Current senior", T2: "Likely senior", T3: "Recent grad",
                        T4: "Younger-sibling keeper", T5: "Weak inference" };
 
   function drawList() {
