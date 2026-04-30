@@ -1,0 +1,27 @@
+name: Push DB migrations
+
+on:
+  push:
+    branches: [main]
+    paths: ["supabase/migrations/**", "supabase/functions/**", ".github/workflows/deploy-db.yml"]
+  workflow_dispatch:
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with: { version: latest }
+      - run: supabase link --project-ref "$SUPABASE_PROJECT_REF" -p "$SUPABASE_DB_PASSWORD"
+      - run: supabase db push -p "$SUPABASE_DB_PASSWORD" --include-all
+      - name: Deploy Edge Functions
+        run: |
+          for f in supabase/functions/*/; do
+            name=$(basename "$f")
+            supabase functions deploy "$name" --no-verify-jwt
+          done

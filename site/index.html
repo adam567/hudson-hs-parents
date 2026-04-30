@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex, nocache">
+<meta name="referrer" content="no-referrer">
+<title>Hudson HS Parents</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" crossorigin="">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header id="topbar" hidden>
+  <div class="brand">Hudson HS Parents</div>
+  <span class="campaign-pill" id="campaignPill" hidden></span>
+  <div class="grow"></div>
+  <button class="btn ghost" id="settingsBtn" title="Settings">Settings</button>
+  <span class="user" id="userEmail"></span>
+  <button class="btn ghost" id="signOutBtn">Sign out</button>
+</header>
+
+<!-- ── Auth ── -->
+<section id="authView" class="auth-view">
+  <div class="card auth-card">
+    <h1>Hudson HS Parents</h1>
+    <p class="muted">Enter the email address you've been invited under. We'll send a 6-digit code.</p>
+    <div id="authStep1">
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="email" placeholder="you@example.com">
+      <button id="sendCodeBtn" class="btn primary">Send code</button>
+    </div>
+    <div id="authStep2" hidden>
+      <label for="otp">6-digit code (check your email)</label>
+      <input id="otp" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="123456">
+      <button id="verifyBtn" class="btn primary">Sign in</button>
+      <button id="restartBtn" class="btn ghost">Use a different email</button>
+    </div>
+    <div class="err" id="authErr"></div>
+    <p class="muted small">No analytics. No tracking. Sessions stored in your browser.</p>
+  </div>
+</section>
+
+<!-- ── App ── -->
+<section id="appView" hidden class="app-shell">
+
+  <!-- Off-season banner (shown when no active campaign) -->
+  <div class="card off-season-banner" id="offSeasonBanner" hidden>
+    <div>
+      <strong id="offSeasonTitle">No active campaign</strong>
+      <span class="muted small" id="offSeasonSub"></span>
+    </div>
+    <div class="banner-actions">
+      <button class="btn primary" id="startCampaignBtn">Start a campaign</button>
+      <button class="btn" id="resumeCampaignBtn" hidden>Resume last campaign</button>
+    </div>
+  </div>
+
+  <aside class="sidebar" id="sidebar">
+
+    <div class="sidebar-tabs">
+      <button class="tab active" data-tab="filters">Filters</button>
+      <button class="tab" data-tab="cohorts">Cohorts</button>
+      <button class="tab" data-tab="areas">Areas</button>
+      <button class="tab" data-tab="recipes">Recipes</button>
+    </div>
+
+    <!-- Filters tab -->
+    <div class="tab-pane" data-pane="filters">
+
+      <section class="filter-section">
+        <h3>Signal tiers</h3>
+        <p class="muted small mb">Solid + larger pins = stronger signal.</p>
+        <label class="tier-toggle"><input type="checkbox" data-tier="T1" checked> <span class="pin-preview T1"></span> T1 — Current senior <span class="count" data-count="T1">—</span></label>
+        <label class="tier-toggle"><input type="checkbox" data-tier="T2" checked> <span class="pin-preview T2"></span> T2 — Recent grad <span class="count" data-count="T2">—</span></label>
+        <label class="tier-toggle"><input type="checkbox" data-tier="T3" checked> <span class="pin-preview T3"></span> T3 — Likely senior <span class="count" data-count="T3">—</span></label>
+        <label class="tier-toggle"><input type="checkbox" data-tier="T4"> <span class="pin-preview T4"></span> T4 — Younger-sibling keeper <span class="count" data-count="T4">—</span></label>
+        <label class="tier-toggle"><input type="checkbox" data-tier="T5"> <span class="pin-preview T5"></span> T5 — Weak inference <span class="count" data-count="T5">—</span></label>
+      </section>
+
+      <section class="filter-section">
+        <h3>Property</h3>
+        <label>Market value
+          <div class="range-row">
+            <input type="number" id="filterMinValue" placeholder="min $" step="50000">
+            <input type="number" id="filterMaxValue" placeholder="max $" step="50000">
+          </div>
+        </label>
+        <label>Years owned
+          <div class="range-row">
+            <input type="number" id="filterMinYears" placeholder="min" min="0" max="60">
+            <input type="number" id="filterMaxYears" placeholder="max" min="0" max="60">
+          </div>
+        </label>
+        <label>Sqft
+          <div class="range-row">
+            <input type="number" id="filterMinSqft" placeholder="min" step="100">
+            <input type="number" id="filterMaxSqft" placeholder="max" step="100">
+          </div>
+        </label>
+        <label>Year built
+          <div class="range-row">
+            <input type="number" id="filterMinYearBuilt" placeholder="from" min="1800" max="2030">
+            <input type="number" id="filterMaxYearBuilt" placeholder="to" min="1800" max="2030">
+          </div>
+        </label>
+        <label>Adults at address
+          <select id="filterAdultCount">
+            <option value="">any</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3+</option>
+          </select>
+        </label>
+        <label>Mailing matches situs
+          <select id="filterMailing">
+            <option value="">include all</option>
+            <option value="only">only owner-occupied</option>
+            <option value="exclude">exclude absentee</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="filter-section">
+        <h3>Knock status</h3>
+        <label class="tier-toggle"><input type="radio" name="knockMode" value="ready" checked> Show ready</label>
+        <label class="tier-toggle"><input type="radio" name="knockMode" value="all"> Show all (ready + cooling)</label>
+        <label class="tier-toggle"><input type="radio" name="knockMode" value="knocked"> Show knocked only</label>
+      </section>
+
+      <section class="filter-section">
+        <h3>Search</h3>
+        <input type="search" id="filterSearch" placeholder="address or owner name">
+      </section>
+
+      <section class="filter-section">
+        <h3>Map layers</h3>
+        <label class="tier-toggle"><input type="checkbox" id="layerHeatmap"> Density heatmap</label>
+        <label class="tier-toggle">Basemap
+          <select id="basemapSelect">
+            <option value="light" selected>Muted light</option>
+            <option value="street">Standard street</option>
+            <option value="satellite">Satellite</option>
+          </select>
+        </label>
+        <label class="tier-toggle">Cluster suggestions
+          <input type="number" id="clusterTargetSize" min="10" max="60" value="22" step="1" style="width:64px">
+        </label>
+        <button class="btn" id="suggestPocketsBtn">Suggest pockets</button>
+        <button class="btn ghost" id="clearPocketsBtn">Clear</button>
+      </section>
+
+      <section class="filter-section">
+        <button class="btn primary block" id="exportMenuBtn">Export ▾</button>
+        <div class="export-menu" id="exportMenu" hidden>
+          <button class="btn ghost block" data-export="csv">Plain CSV</button>
+          <button class="btn ghost block" data-export="mymaps">Google My Maps CSV</button>
+          <button class="btn ghost block" data-export="avery5160">Avery 5160 (30/sheet)</button>
+          <button class="btn ghost block" data-export="avery5161">Avery 5161 (20/sheet)</button>
+          <button class="btn ghost block" data-export="avery5163">Avery 5163 (10/sheet)</button>
+          <button class="btn ghost block" data-export="avery5164">Avery 5164 (6/sheet doorhang)</button>
+          <button class="btn ghost block" data-export="pdf">Printable PDF packet</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- Cohort chips tab -->
+    <div class="tab-pane" data-pane="cohorts" hidden>
+      <section class="filter-section">
+        <h3>Quick cohorts</h3>
+        <p class="muted small mb">Click to apply. Click again to remove. Multiple stack.</p>
+        <div class="chips" id="cohortChips">
+          <button class="chip" data-cohort="younger_siblings">Younger-sibling keepers</button>
+          <button class="chip" data-cohort="recent_grads">Recent grads</button>
+          <button class="chip" data-cohort="long_tenure_15">Long tenure 15+</button>
+          <button class="chip" data-cohort="long_tenure_25">Long tenure 25+</button>
+          <button class="chip" data-cohort="top_value">Top value quartile</button>
+          <button class="chip" data-cohort="two_adults">Two-adult households</button>
+          <button class="chip" data-cohort="single_adult">Single-adult deprioritized</button>
+          <button class="chip" data-cohort="dz_voter">Datazapp + voter</button>
+          <button class="chip" data-cohort="dz_only">Datazapp only</button>
+          <button class="chip" data-cohort="cooldown_expired">Cooldown expired</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- Saved areas tab -->
+    <div class="tab-pane" data-pane="areas" hidden>
+      <section class="filter-section">
+        <h3>Saved areas</h3>
+        <p class="muted small mb">Draw a polygon on the map then save it. Click an area name to fly there.</p>
+        <div class="draw-controls">
+          <button class="btn" id="drawPolygonBtn">Draw polygon</button>
+          <button class="btn" id="drawRectangleBtn">Draw box</button>
+          <button class="btn ghost" id="clearDrawBtn">Clear</button>
+        </div>
+        <div id="savedAreaList" class="saved-list"></div>
+      </section>
+    </div>
+
+    <!-- Saved recipes tab -->
+    <div class="tab-pane" data-pane="recipes" hidden>
+      <section class="filter-section">
+        <h3>Saved filter recipes</h3>
+        <p class="muted small mb">Save the current filter set as a named recipe.</p>
+        <div class="recipe-row">
+          <input type="text" id="recipeName" placeholder="e.g. Spring 2026 Tier 1 Hot Zones">
+          <button class="btn primary" id="saveRecipeBtn">Save</button>
+        </div>
+        <div id="savedRecipeList" class="saved-list"></div>
+      </section>
+    </div>
+
+  </aside>
+
+  <main class="map-area">
+    <div class="map-header card">
+      <div id="visibleCount" class="muted small">— households visible</div>
+      <div class="grow"></div>
+      <div id="dataFreshness" class="muted small"></div>
+    </div>
+    <div id="map"></div>
+  </main>
+
+</section>
+
+<!-- Pin detail drawer -->
+<aside id="drawer" class="drawer" hidden>
+  <div class="drawer-head">
+    <div>
+      <div class="drawer-tier" id="dTier"></div>
+      <h2 id="dName"></h2>
+      <div class="muted" id="dAddr"></div>
+    </div>
+    <button class="btn ghost" id="closeDrawer">Close</button>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+</aside>
+
+<!-- Settings modal -->
+<div id="settingsModal" class="modal" hidden>
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2>Settings</h2>
+      <button class="btn ghost" id="closeSettings">Close</button>
+    </div>
+    <div class="modal-body" id="settingsBody"></div>
+  </div>
+</div>
+
+<!-- Campaign modal (start / resume / pick) -->
+<div id="campaignModal" class="modal" hidden>
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2 id="campaignModalTitle">Start a campaign</h2>
+      <button class="btn ghost" id="closeCampaignModal">Close</button>
+    </div>
+    <div class="modal-body" id="campaignBody"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script>window.HHSP_CONFIG = window.HHSP_CONFIG || {};</script>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<script src="app.js"></script>
+
+</body>
+</html>

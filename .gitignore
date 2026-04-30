@@ -1,0 +1,23 @@
+# Operator-supplied data files (never commit — contain PII)
+data/
+*.csv
+!tests/**/*.csv
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Editor
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Supabase locals
+.supabase/
+supabase/.temp/
