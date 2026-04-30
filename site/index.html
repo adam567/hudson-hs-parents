@@ -24,18 +24,12 @@
 <section id="authView" class="auth-view">
   <div class="card auth-card">
     <h1>Hudson HS Parents</h1>
-    <p class="muted">Enter the email address you've been invited under. We'll send a 6-digit code.</p>
-    <div id="authStep1">
-      <label for="email">Email</label>
-      <input id="email" type="email" autocomplete="email" placeholder="you@example.com">
-      <button id="sendCodeBtn" class="btn primary">Send code</button>
-    </div>
-    <div id="authStep2" hidden>
-      <label for="otp">6-digit code (check your email)</label>
-      <input id="otp" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="123456">
-      <button id="verifyBtn" class="btn primary">Sign in</button>
-      <button id="restartBtn" class="btn ghost">Use a different email</button>
-    </div>
+    <p class="muted">Sign in with your email and password.</p>
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="email" placeholder="you@example.com">
+    <label for="password" style="margin-top:10px">Password</label>
+    <input id="password" type="password" autocomplete="current-password" placeholder="••••••••">
+    <button id="signInBtn" class="btn primary" style="margin-top:10px">Sign in</button>
     <div class="err" id="authErr"></div>
     <p class="muted small">No analytics. No tracking. Sessions stored in your browser.</p>
   </div>

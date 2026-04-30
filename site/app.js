@@ -71,29 +71,18 @@
   };
 
   // ── Auth ────────────────────────────────────────────────────────────
-  $("#sendCodeBtn").addEventListener("click", async () => {
+  async function doSignIn() {
     $("#authErr").textContent = "";
     const email = $("#email").value.trim();
-    if (!email) { $("#authErr").textContent = "Enter your email."; return; }
-    const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
-    if (error) { $("#authErr").textContent = error.message; return; }
-    $("#authStep1").hidden = true; $("#authStep2").hidden = false;
-    setTimeout(() => $("#otp").focus(), 50);
-    toast("Check your inbox for a 6-digit code.");
-  });
-  $("#verifyBtn").addEventListener("click", async () => {
-    $("#authErr").textContent = "";
-    const email = $("#email").value.trim();
-    const code = $("#otp").value.trim();
-    if (!code) { $("#authErr").textContent = "Enter the 6-digit code."; return; }
-    const { error } = await supabase.auth.verifyOtp({ email, token: code, type: "email" });
+    const password = $("#password").value;
+    if (!email || !password) { $("#authErr").textContent = "Email and password required."; return; }
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { $("#authErr").textContent = error.message; return; }
     await onSignedIn();
-  });
-  $("#restartBtn").addEventListener("click", () => {
-    $("#authStep1").hidden = false; $("#authStep2").hidden = true;
-    $("#otp").value = ""; $("#authErr").textContent = "";
-  });
+  }
+  $("#signInBtn").addEventListener("click", doSignIn);
+  $("#password").addEventListener("keydown", (e) => { if (e.key === "Enter") doSignIn(); });
+  $("#email").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#password").focus(); });
   $("#signOutBtn").addEventListener("click", async () => {
     await supabase.auth.signOut(); location.reload();
   });
