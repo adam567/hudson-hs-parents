@@ -38,12 +38,14 @@
   const state = {
     user: null,
     prefs: null,
-    activeCampaign: null,
-    campaigns: [],
     targets: [],          // v_targets rows
-    knockState: new Map(),// household_id -> {status, cooldown_until, last_outcome, last_note, readiness}
     savedAreas: [],
     savedRecipes: [],
+    tags: [],             // [{id, name, household_ids:[...], notes, created_at, updated_at}]
+    tagsByHh: new Map(),  // household_id -> [tag objects]
+    selectedIds: new Set(),
+    activeTagFilter: null,   // tag id, when filtering by a tag
+    lastClickedIdx: -1,
     filters: {
       tiers: { T1: true, T2: true, T3: true, T4: false, T5: false },
       cohorts: new Set(),
@@ -53,7 +55,6 @@
       minYearBuilt: null, maxYearBuilt: null,
       adultCount: "",
       mailingMode: "",
-      knockMode: "ready",
       search: "",
       drawnArea: null,           // {type:'Polygon', coordinates:[[[lng,lat],...]]}
     },
@@ -65,6 +66,8 @@
     clusterLayer: null,
     visibleSet: [],
     firstLoad: true,
+    viewMode: "map",          // "map" | "list"
+    sort: { col: "display_name", dir: "asc" },
   };
 
   // ── Auth ────────────────────────────────────────────────────────────
@@ -108,7 +111,6 @@
     state.user = user;
     $("#userEmail").textContent = user?.email || "";
     await loadPrefs();
-    await loadCampaigns();
     await loadEverything();
     await markLastSeen();
     initMap();
@@ -136,40 +138,11 @@
         el.checked = enabled.has(el.dataset.tier);
       });
     }
-    if (state.prefs?.default_show_knocked_mode) {
-      const m = state.prefs.default_show_knocked_mode === "hide" ? "ready"
-              : state.prefs.default_show_knocked_mode === "only" ? "knocked" : "all";
-      state.filters.knockMode = m;
-      const radio = $(`input[name=knockMode][value=${m}]`);
-      if (radio) radio.checked = true;
-    }
     if (state.prefs?.default_basemap) {
       $("#basemapSelect").value = state.prefs.default_basemap;
     }
     if (state.prefs?.default_cluster_target_size) {
       $("#clusterTargetSize").value = state.prefs.default_cluster_target_size;
-    }
-  }
-
-  async function loadCampaigns() {
-    const { data, error } = await supabase.from("campaigns")
-      .select("*").order("started_at", { ascending: false });
-    if (error) { toast("campaigns: " + error.message); return; }
-    state.campaigns = data || [];
-    state.activeCampaign = state.campaigns.find(c => c.is_active) || null;
-    if (state.activeCampaign) {
-      $("#campaignPill").textContent = state.activeCampaign.name;
-      $("#campaignPill").hidden = false;
-      $("#offSeasonBanner").hidden = true;
-    } else {
-      $("#campaignPill").hidden = true;
-      $("#offSeasonBanner").hidden = false;
-      const last = state.campaigns[0];
-      if (last) {
-        $("#offSeasonTitle").textContent = "No active campaign";
-        $("#offSeasonSub").textContent = ` · last: ${last.name} (${fmtDate(last.started_at)})`;
-        $("#resumeCampaignBtn").hidden = false;
-      }
     }
   }
 
@@ -181,29 +154,33 @@
   }
 
   async function loadEverything() {
-    const queries = [
+    const results = await Promise.all([
       supabase.from("v_targets").select("*"),
       supabase.from("saved_filter_recipes").select("*").order("name"),
       supabase.from("saved_areas").select("*").order("name"),
-    ];
-    if (state.activeCampaign) {
-      queries.push(supabase.from("v_active_campaign_state")
-        .select("*")
-        .eq("campaign_id", state.activeCampaign.id));
-    }
-    const results = await Promise.all(queries);
+      supabase.from("tags").select("*").order("name"),
+    ]);
     if (results[0].error) toast("targets: " + results[0].error.message);
     else state.targets = (results[0].data || []).filter(r => r.tier && r.tier !== "TX");
     state.savedRecipes = results[1].data || [];
     state.savedAreas = results[2].data || [];
-    state.knockState = new Map();
-    if (results[3]) {
-      (results[3].data || []).forEach(s => state.knockState.set(s.household_id, s));
-    }
+    state.tags = results[3].data || [];
+    rebuildTagsByHh();
     drawTierCounts();
     drawSavedRecipes();
     drawSavedAreas();
+    drawSavedTags();
     drawFreshness();
+  }
+
+  function rebuildTagsByHh() {
+    state.tagsByHh = new Map();
+    state.tags.forEach(t => {
+      (t.household_ids || []).forEach(hid => {
+        if (!state.tagsByHh.has(hid)) state.tagsByHh.set(hid, []);
+        state.tagsByHh.get(hid).push(t);
+      });
+    });
   }
 
   function drawFreshness() {
@@ -276,13 +253,6 @@
   // ── Filtering ───────────────────────────────────────────────────────
   function passesFilters(r) {
     if (!state.filters.tiers[r.tier]) return false;
-    const knockState = state.knockState.get(r.household_id);
-    const readiness = knockState?.readiness || "ready";
-    if (state.filters.knockMode === "ready") {
-      if (readiness !== "ready" || knockState?.status === "knocked") return false;
-    } else if (state.filters.knockMode === "knocked") {
-      if (knockState?.status !== "knocked") return false;
-    }
     const f = state.filters;
     if (f.minValue != null && (r.market_value ?? 0) < f.minValue) return false;
     if (f.maxValue != null && (r.market_value ?? 0) > f.maxValue) return false;
@@ -305,20 +275,22 @@
     if (f.drawnArea && r.lat && r.lng) {
       if (!pointInPolygon([r.lng, r.lat], f.drawnArea)) return false;
     }
+    if (state.activeTagFilter) {
+      const tag = state.tags.find(t => t.id === state.activeTagFilter);
+      if (!tag || !(tag.household_ids || []).includes(r.household_id)) return false;
+    }
     return true;
   }
 
   function cohortPasses(r) {
     const cohorts = state.filters.cohorts;
     if (!cohorts.size) return true;
-    const knockState = state.knockState.get(r.household_id);
     const checks = {
       younger_siblings: () => r.tier === "T4",
       recent_grads: () => r.has_19_20_voter,
       long_tenure_15: () => (r.years_owned ?? 0) >= 15,
       long_tenure_25: () => (r.years_owned ?? 0) >= 25,
       top_value: () => {
-        // Top-quartile gate is server-side; we approximate client-side.
         const sorted = state.targets
           .map(x => x.market_value).filter(x => x != null).sort((a,b) => b - a);
         if (!sorted.length) return false;
@@ -329,7 +301,6 @@
       single_adult: () => r.adult_count === 1,
       dz_voter: () => r.datazapp_hit && (r.has_17_18_voter || r.has_19_20_voter),
       dz_only: () => r.datazapp_hit && !r.has_17_18_voter && !r.has_19_20_voter,
-      cooldown_expired: () => knockState?.readiness === "ready" && knockState?.status === "knocked",
     };
     for (const c of cohorts) {
       if (!checks[c] || !checks[c]()) return false;
@@ -390,8 +361,6 @@
     $("#filterAdultCount").value = state.filters.adultCount;
     $("#filterMailing").value = state.filters.mailingMode;
     $("#filterSearch").value = state.filters.search;
-    const radio = $(`input[name=knockMode][value=${state.filters.knockMode}]`);
-    if (radio) radio.checked = true;
   }
 
   function snapshotFilterState() {
@@ -476,11 +445,8 @@
     }
     state.visibleSet.forEach(r => {
       if (!r.lat || !r.lng) return;
-      const knockState = state.knockState.get(r.household_id);
-      const isKnocked = knockState?.status === "knocked" && knockState?.readiness !== "ready";
       const cls = `lead-marker marker-${r.tier}` +
-                  (state.firstLoad && r.tier === "T1" ? " first-load" : "") +
-                  (isKnocked ? " marker-knocked" : "");
+                  (state.firstLoad && r.tier === "T1" ? " first-load" : "");
       const icon = L.divIcon({ className: cls, iconSize: null });
       const m = L.marker([r.lat, r.lng], { icon });
       m.on("click", () => openDrawer(r.household_id));
@@ -488,6 +454,211 @@
     });
     state.firstLoad = false;
     $("#visibleCount").textContent = `${state.visibleSet.length.toLocaleString()} households visible`;
+  }
+
+  // ── List view ───────────────────────────────────────────────────────
+  function compareRows(a, b, col, dir) {
+    const sgn = dir === "desc" ? -1 : 1;
+    let av, bv;
+    if (col === "senior_score") {
+      av = (a.count_17_18_voters ?? 0) * 10 + (a.count_19_20_voters ?? 0);
+      bv = (b.count_17_18_voters ?? 0) * 10 + (b.count_19_20_voters ?? 0);
+    } else if (col === "datazapp_hit") {
+      av = a.datazapp_hit ? 1 : 0;
+      bv = b.datazapp_hit ? 1 : 0;
+    } else {
+      av = a[col]; bv = b[col];
+    }
+    if (typeof av === "string" || typeof bv === "string") {
+      av = (av || "").toString().toUpperCase();
+      bv = (bv || "").toString().toUpperCase();
+      if (av < bv) return -1 * sgn;
+      if (av > bv) return  1 * sgn;
+      return 0;
+    }
+    av = av ?? -Infinity;
+    bv = bv ?? -Infinity;
+    return (av - bv) * sgn;
+  }
+
+  const TIER_LABEL = { T1: "Current senior", T2: "Recent grad", T3: "Likely senior",
+                       T4: "Younger-sibling keeper", T5: "Weak inference" };
+
+  function drawList() {
+    const sorted = state.visibleSet.slice().sort((a, b) => compareRows(a, b, state.sort.col, state.sort.dir));
+    state.listOrder = sorted;     // ordered by current sort, used for shift-click range
+    const body = $("#hhTableBody");
+    if (!sorted.length) {
+      body.innerHTML = `<tr><td colspan="10" class="muted small" style="padding:24px;text-align:center">No households match the current filters.</td></tr>`;
+    } else {
+      body.innerHTML = sorted.map((r, i) => {
+        const checked = state.selectedIds.has(r.household_id);
+        const tagsForRow = (state.tagsByHh.get(r.household_id) || [])
+          .map(t => `<span class="row-tag-chip">${escape(t.name)}</span>`).join("");
+        return `
+        <tr data-id="${r.household_id}" data-idx="${i}" class="${checked ? "selected" : ""}">
+          <td class="check-col"><input type="checkbox" class="row-cb" ${checked ? "checked" : ""}></td>
+          <td class="owner">${escape(r.display_name || "—")}</td>
+          <td class="addr">${escape(r.situs_address || "—")}</td>
+          <td><span class="tier-badge ${r.tier}" title="${TIER_LABEL[r.tier] || ""}">${r.tier}</span></td>
+          <td class="num">${r.market_value != null ? "$" + Math.round(r.market_value).toLocaleString() : "—"}</td>
+          <td class="num">${r.years_owned ?? "—"}</td>
+          <td class="num">${r.adult_count ?? "—"}</td>
+          <td class="num">${r.count_17_18_voters ? r.count_17_18_voters : (r.count_19_20_voters ? "·" + r.count_19_20_voters : "—")}</td>
+          <td class="num">${r.datazapp_hit ? "✓" : ""}</td>
+          <td class="tags-col">${tagsForRow}</td>
+        </tr>`;
+      }).join("");
+    }
+    $$("#hhTable thead th[data-sort]").forEach(th => {
+      th.classList.remove("sorted-asc","sorted-desc");
+      if (th.dataset.sort === state.sort.col) th.classList.add(state.sort.dir === "asc" ? "sorted-asc" : "sorted-desc");
+    });
+    $("#listToolbar").textContent = `${sorted.length.toLocaleString()} households · sorted by ${state.sort.col === "senior_score" ? "senior signal" : state.sort.col.replace(/_/g," ")} (${state.sort.dir})`;
+    $("#visibleCount").textContent = `${sorted.length.toLocaleString()} households visible`;
+    refreshSelectionUI();
+  }
+
+  function refreshSelectionUI() {
+    const n = state.selectedIds.size;
+    $("#selectionCount").textContent = n ? `${n} selected` : "";
+    $("#tagSelectionBtn").disabled = n === 0;
+    $("#clearSelectionBtn").disabled = n === 0;
+    // Header checkbox state — checked if every visible row is selected
+    const allChecked = state.listOrder?.length && state.listOrder.every(r => state.selectedIds.has(r.household_id));
+    const someChecked = state.listOrder?.some(r => state.selectedIds.has(r.household_id));
+    const cb = $("#selectAllCb");
+    if (cb) {
+      cb.checked = !!allChecked;
+      cb.indeterminate = !!someChecked && !allChecked;
+    }
+  }
+
+  function toggleSelect(hid, on) {
+    if (on) state.selectedIds.add(hid); else state.selectedIds.delete(hid);
+    const tr = document.querySelector(`#hhTableBody tr[data-id="${hid}"]`);
+    if (tr) {
+      tr.classList.toggle("selected", on);
+      const cb = tr.querySelector(".row-cb");
+      if (cb) cb.checked = on;
+    }
+  }
+
+  function clearSelection() {
+    state.selectedIds.clear();
+    $$("#hhTableBody tr.selected").forEach(tr => tr.classList.remove("selected"));
+    $$("#hhTableBody .row-cb").forEach(cb => cb.checked = false);
+    state.lastClickedIdx = -1;
+    refreshSelectionUI();
+  }
+
+  function drawSavedTags() {
+    const list = $("#tagList");
+    if (!list) return;
+    list.innerHTML = state.tags.length ? state.tags.map(t => `
+      <div class="saved-row ${state.activeTagFilter === t.id ? "active" : ""}" data-id="${t.id}">
+        <span class="name">${escape(t.name)}</span>
+        <span class="tag-count">${(t.household_ids || []).length}</span>
+        <button class="apply" title="Filter to this tag">filter</button>
+        <button class="del" title="Delete tag">×</button>
+      </div>`).join("") : `<div class="muted small">No tags yet. Multiselect rows in List view, then "Tag selection".</div>`;
+    $$("#tagList .apply").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const id = btn.closest(".saved-row").dataset.id;
+        state.activeTagFilter = state.activeTagFilter === id ? null : id;
+        drawSavedTags();
+        render();
+        toast(state.activeTagFilter ? "Filtered to tag" : "Tag filter cleared");
+      });
+    });
+    $$("#tagList .del").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const id = btn.closest(".saved-row").dataset.id;
+        const tag = state.tags.find(t => t.id === id);
+        if (!confirm(`Delete tag "${tag?.name}"? Households keep their other tags.`)) return;
+        const { error } = await supabase.from("tags").delete().eq("id", id);
+        if (error) { toast(error.message); return; }
+        state.tags = state.tags.filter(t => t.id !== id);
+        if (state.activeTagFilter === id) state.activeTagFilter = null;
+        rebuildTagsByHh();
+        drawSavedTags();
+        render();
+        toast("Tag deleted");
+      });
+    });
+  }
+
+  function openTagModal() {
+    if (!state.selectedIds.size) return;
+    const selectedArr = Array.from(state.selectedIds);
+    const existing = state.tags.map(t => `
+      <button class="chip" data-tag-id="${t.id}">
+        ${escape(t.name)} <span class="muted small">(${(t.household_ids || []).length})</span>
+      </button>`).join("");
+    $("#tagModalBody").innerHTML = `
+      <p class="muted small">Apply an existing tag to ${selectedArr.length} selected household${selectedArr.length === 1 ? "" : "s"}, or create a new one.</p>
+      <label>New tag
+        <input type="text" id="newTagName" placeholder="e.g. Spring 2026, Old church friends, Follow up">
+      </label>
+      <div class="actions"><button class="btn primary" id="createTagBtn">Create + apply</button></div>
+      ${state.tags.length ? `<h3 style="margin-top:14px">Existing tags</h3>
+      <div class="tag-modal-existing">${existing}</div>` : ""}
+    `;
+    $("#tagModal").hidden = false;
+    $("#newTagName").focus();
+    $("#createTagBtn").addEventListener("click", async () => {
+      const name = $("#newTagName").value.trim();
+      if (!name) { toast("Name required"); return; }
+      if (state.tags.find(t => t.name.toLowerCase() === name.toLowerCase())) {
+        toast(`Tag "${name}" exists — click it instead`); return;
+      }
+      const { data, error } = await supabase.from("tags").insert({
+        user_id: state.user.id, name, household_ids: selectedArr,
+      }).select().single();
+      if (error) { toast(error.message); return; }
+      state.tags.push(data);
+      rebuildTagsByHh();
+      drawSavedTags();
+      $("#tagModal").hidden = true;
+      toast(`Tagged ${selectedArr.length} as "${name}"`);
+      drawList();
+    });
+    $$(".tag-modal-existing .chip").forEach(b => {
+      b.addEventListener("click", async () => {
+        const id = b.dataset.tagId;
+        const tag = state.tags.find(t => t.id === id);
+        if (!tag) return;
+        const merged = Array.from(new Set([...(tag.household_ids || []), ...selectedArr]));
+        const added = merged.length - (tag.household_ids || []).length;
+        const { data, error } = await supabase.from("tags")
+          .update({ household_ids: merged }).eq("id", id).select().single();
+        if (error) { toast(error.message); return; }
+        Object.assign(tag, data);
+        rebuildTagsByHh();
+        drawSavedTags();
+        $("#tagModal").hidden = true;
+        toast(added > 0 ? `Added ${added} to "${tag.name}"` : `Already in "${tag.name}"`);
+        drawList();
+      });
+    });
+  }
+
+  function setViewMode(mode) {
+    state.viewMode = mode;
+    $("#map").hidden = (mode !== "map");
+    $("#listView").hidden = (mode !== "list");
+    $$(".view-toggle .vt").forEach(b => {
+      const on = b.dataset.view === mode;
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    if (mode === "map" && state.map) {
+      // Leaflet needs a nudge after being unhidden so it re-measures.
+      setTimeout(() => state.map.invalidateSize(), 30);
+    }
+    render();
   }
 
   // ── Drawer ──────────────────────────────────────────────────────────
@@ -498,8 +669,7 @@
     const r = state.targets.find(x => x.household_id === id);
     if (!r) return;
     drawerHouseholdId = id;
-    const ks = state.knockState.get(id);
-    const tierLabel = {T1:"Current senior", T2:"Recent grad", T3:"Likely senior", T4:"Younger-sibling keeper", T5:"Weak inference"}[r.tier] || r.tier;
+    const tierLabel = TIER_LABEL[r.tier] || r.tier;
     $("#dTier").innerHTML = `<span class="pin-preview ${r.tier}"></span> Tier ${r.tier} · ${tierLabel} · ${r.evidence_score}`;
     $("#dName").textContent = r.display_name || "Unknown owner";
     $("#dAddr").textContent = `${r.situs_address || "—"}${r.situs_city ? ", " + r.situs_city : ""} ${r.situs_zip || ""}`;
@@ -521,12 +691,6 @@
 
     const ownerList = (r.owner_names || []).map(o => `<div class="muted small">${escape(o)}</div>`).join("");
 
-    const knockedUntil = ks?.cooldown_until;
-    const knockedSummary = ks?.last_action_at
-      ? `Last touch: <strong>${escape(ks.last_outcome || "knocked")}</strong> on ${fmtDate(ks.last_action_at)}` +
-        (knockedUntil ? ` · cooling until ${fmtDate(knockedUntil)}` : "")
-      : "Not yet knocked.";
-
     $("#drawerBody").innerHTML = `
       ${r.why_sentence ? `<div class="why-sentence">${escape(r.why_sentence)}</div>` : ""}
       <div class="evidence-chips">${chips}</div>
@@ -536,71 +700,8 @@
 
       <div class="section-h">Owners</div>
       ${ownerList || "<div class='muted small'>—</div>"}
-
-      <div class="section-h">Knock</div>
-      <div class="muted small">${knockedSummary}</div>
-      <div class="outcome-row">
-        <button class="btn primary" data-outcome="knocked">Mark knocked</button>
-        <button class="btn" data-outcome="no_answer">No answer</button>
-        <button class="btn" data-outcome="talked">Talked</button>
-        <button class="btn" data-outcome="follow_up">Follow-up requested</button>
-        <button class="btn" data-outcome="skip">Skip</button>
-      </div>
-      <div class="muted small" style="margin-top:8px">Cooldown after knock</div>
-      <div class="cooldown-row" id="cooldownRow">
-        ${[7,14,30,60,90,null].map(d =>
-          `<button class="btn" data-cd="${d ?? 'next'}">${d ? d + ' days' : 'until next signal'}</button>`).join("")}
-      </div>
-      <textarea id="dNote" rows="3" placeholder="Optional note" style="margin-top:10px">${escape(ks?.last_note || "")}</textarea>
-      ${ks?.status === "knocked" ? `<button class="btn ghost" id="resetKnockBtn" style="margin-top:8px">Undo knock</button>` : ""}
     `;
     $("#drawer").hidden = false;
-
-    let cdOverride = state.prefs?.default_cooldown_days ?? 30;
-    $$("#cooldownRow .btn").forEach(b => {
-      b.addEventListener("click", () => {
-        $$("#cooldownRow .btn").forEach(x => x.classList.remove("active"));
-        b.classList.add("active");
-        const v = b.dataset.cd;
-        cdOverride = v === "next" ? null : parseInt(v, 10);
-      });
-    });
-    $$(".outcome-row .btn").forEach(b => {
-      b.addEventListener("click", async () => {
-        await markKnocked(id, b.dataset.outcome, $("#dNote").value, cdOverride);
-      });
-    });
-    if ($("#resetKnockBtn")) {
-      $("#resetKnockBtn").addEventListener("click", async () => {
-        await supabase.rpc("reset_knock", { p_household_id: id });
-        state.knockState.delete(id);
-        toast("Knock reset");
-        $("#drawer").hidden = true;
-        render();
-      });
-    }
-  }
-
-  async function markKnocked(householdId, outcome, note, cooldownOverride) {
-    if (!state.activeCampaign) {
-      toast("Start a campaign first");
-      return;
-    }
-    const { error } = await supabase.rpc("mark_knocked", {
-      p_household_id: householdId,
-      p_outcome: outcome,
-      p_note: note || "",
-      p_cooldown_days_override: cooldownOverride,
-    });
-    if (error) { toast("Save failed: " + error.message); return; }
-    // Refresh local state
-    const { data } = await supabase.from("v_active_campaign_state").select("*")
-      .eq("campaign_id", state.activeCampaign.id)
-      .eq("household_id", householdId).maybeSingle();
-    if (data) state.knockState.set(householdId, data);
-    toast(outcome === "knocked" ? "Knocked ✓" : `Marked: ${outcome}`);
-    $("#drawer").hidden = true;
-    render();
   }
 
   // ── UI bindings ─────────────────────────────────────────────────────
@@ -648,12 +749,6 @@
       state.filters.search = $("#filterSearch").value.trim().toLowerCase();
       debouncedRender();
     });
-    $$("input[name=knockMode]").forEach(r => {
-      r.addEventListener("change", () => {
-        if (r.checked) { state.filters.knockMode = r.value; render(); }
-      });
-    });
-
     // Cohort chips
     $$(".chip").forEach(c => c.addEventListener("click", () => {
       const k = c.dataset.cohort;
@@ -737,19 +832,67 @@
       });
     });
 
-    // Settings + campaign modals
+    // Settings
     $("#settingsBtn").addEventListener("click", openSettings);
     $("#closeSettings").addEventListener("click", () => $("#settingsModal").hidden = true);
-    $("#startCampaignBtn").addEventListener("click", () => openCampaignModal("start"));
-    $("#resumeCampaignBtn").addEventListener("click", () => openCampaignModal("resume"));
-    $("#closeCampaignModal").addEventListener("click", () => $("#campaignModal").hidden = true);
 
-    // Esc closes drawer / modals
+    // View toggle (Map | List)
+    $$(".view-toggle .vt").forEach(b => b.addEventListener("click", () => setViewMode(b.dataset.view)));
+
+    // Table sort
+    $$("#hhTable thead th.sortable").forEach(th => {
+      th.addEventListener("click", () => {
+        const col = th.dataset.sort;
+        if (state.sort.col === col) state.sort.dir = state.sort.dir === "asc" ? "desc" : "asc";
+        else { state.sort.col = col; state.sort.dir = (col === "display_name" || col === "situs_address" || col === "tier") ? "asc" : "desc"; }
+        drawList();
+      });
+    });
+
+    // Row click → drawer; checkbox click → select (with shift-range)
+    $("#hhTableBody").addEventListener("click", (e) => {
+      const tr = e.target.closest("tr[data-id]");
+      if (!tr) return;
+      const hid = tr.dataset.id;
+      const idx = parseInt(tr.dataset.idx, 10);
+      if (e.target.classList.contains("row-cb") || e.target.classList.contains("check-col")) {
+        // Don't open drawer; treat as selection toggle
+        e.stopPropagation();
+        const cb = tr.querySelector(".row-cb");
+        const wantOn = e.target === cb ? cb.checked : !state.selectedIds.has(hid);
+        if (e.shiftKey && state.lastClickedIdx >= 0) {
+          const [lo, hi] = [Math.min(state.lastClickedIdx, idx), Math.max(state.lastClickedIdx, idx)];
+          for (let i = lo; i <= hi; i++) {
+            const r = state.listOrder[i]; if (r) toggleSelect(r.household_id, wantOn);
+          }
+        } else {
+          toggleSelect(hid, wantOn);
+        }
+        state.lastClickedIdx = idx;
+        refreshSelectionUI();
+        return;
+      }
+      openDrawer(hid);
+    });
+
+    // Header select-all (visible)
+    $("#selectAllCb").addEventListener("change", () => {
+      const on = $("#selectAllCb").checked;
+      (state.listOrder || []).forEach(r => toggleSelect(r.household_id, on));
+      refreshSelectionUI();
+    });
+
+    // Selection toolbar
+    $("#tagSelectionBtn").addEventListener("click", openTagModal);
+    $("#clearSelectionBtn").addEventListener("click", clearSelection);
+    $("#closeTagModal").addEventListener("click", () => $("#tagModal").hidden = true);
+
+    // Esc closes drawer / settings / tag modal
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
+      if (!$("#tagModal").hidden) { $("#tagModal").hidden = true; return; }
       if (!$("#drawer").hidden) { $("#drawer").hidden = true; return; }
       if (!$("#settingsModal").hidden) { $("#settingsModal").hidden = true; return; }
-      if (!$("#campaignModal").hidden) { $("#campaignModal").hidden = true; return; }
     });
   }
 
@@ -769,7 +912,8 @@
   // ── Render ──────────────────────────────────────────────────────────
   function render() {
     state.visibleSet = state.targets.filter(passesFilters);
-    drawMap();
+    if (state.viewMode === "list") drawList();
+    else drawMap();
   }
 
   // ── Cluster suggestions (DBSCAN-lite) ───────────────────────────────
@@ -851,7 +995,6 @@
     if (kind === "avery5161") return downloadCsv(`avery-5161-${today}.csv`, averyCsv(set, "5161"));
     if (kind === "avery5163") return downloadCsv(`avery-5163-${today}.csv`, averyCsv(set, "5163"));
     if (kind === "avery5164") return downloadCsv(`avery-5164-${today}.csv`, averyCsv(set, "5164"));
-    if (kind === "pdf") return requestPdfPacket(set);
   }
 
   function csvEscape(v) {
@@ -908,43 +1051,10 @@
     return head + "\n" + body;
   }
 
-  async function requestPdfPacket(set) {
-    if (!state.activeCampaign) { toast("Start a campaign first"); return; }
-    toast("Building packet…");
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { toast("Sign in again"); return; }
-    const url = `${cfg.SUPABASE_URL}/functions/v1/pdf_packet`;
-    const r = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${session.access_token}`,
-        "apikey": cfg.SUPABASE_ANON_KEY,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        campaign_id: state.activeCampaign.id,
-        household_ids: set.slice(0, 200).map(r => r.household_id),
-        polygon: state.filters.drawnArea || null,
-      }),
-    });
-    if (!r.ok) { toast("Packet failed: " + r.status); return; }
-    const html = await r.text();
-    // Open in a new window and trigger print dialog. User saves as PDF.
-    const w = window.open("", "_blank");
-    if (!w) { toast("Pop-up blocked — allow pop-ups for this site"); return; }
-    w.document.write(html);
-    w.document.close();
-    setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 600);
-    toast("Packet ready — print or save as PDF");
-  }
-
   // ── Settings modal ──────────────────────────────────────────────────
   function openSettings() {
     const p = state.prefs || {};
     $("#settingsBody").innerHTML = `
-      <label>Default cooldown after knock (days)
-        <input type="number" id="setCooldown" min="1" max="365" value="${p.default_cooldown_days ?? 30}">
-      </label>
       <label>Email digest cadence
         <select id="setCadence">
           ${["off","on_demand","daily","weekdays","weekly_monday"].map(c =>
@@ -963,13 +1073,6 @@
             `<option value="${b}" ${p.default_basemap===b?"selected":""}>${b}</option>`).join("")}
         </select>
       </label>
-      <label>Show knocked households on map by default
-        <select id="setShowKnocked">
-          <option value="hide" ${p.default_show_knocked_mode==="hide"?"selected":""}>Hide</option>
-          <option value="show" ${p.default_show_knocked_mode==="show"?"selected":""}>Show</option>
-          <option value="only" ${p.default_show_knocked_mode==="only"?"selected":""}>Show only knocked</option>
-        </select>
-      </label>
       <div class="actions">
         <button class="btn" id="settingsCancel">Cancel</button>
         <button class="btn primary" id="settingsSave">Save</button>
@@ -979,12 +1082,10 @@
     $("#settingsCancel").addEventListener("click", () => $("#settingsModal").hidden = true);
     $("#settingsSave").addEventListener("click", async () => {
       const updates = {
-        default_cooldown_days: parseInt($("#setCooldown").value, 10) || 30,
         email_cadence: $("#setCadence").value,
         email_send_hour_local: parseInt($("#setHour").value, 10),
         default_cluster_target_size: parseInt($("#setClusterSize").value, 10) || 22,
         default_basemap: $("#setBasemap").value,
-        default_show_knocked_mode: $("#setShowKnocked").value,
       };
       const { error } = await supabase.from("user_preferences").update(updates).eq("user_id", state.user.id);
       if (error) { toast("Save failed: " + error.message); return; }
@@ -993,76 +1094,6 @@
       setBasemap(state.prefs.default_basemap);
       toast("Settings saved");
     });
-  }
-
-  // ── Campaign modal ──────────────────────────────────────────────────
-  function openCampaignModal(mode) {
-    const today = new Date();
-    const defaultName = `Spring ${today.getFullYear()}`;
-    $("#campaignModalTitle").textContent = mode === "resume" ? "Resume campaign" : "Start a campaign";
-    const previous = state.campaigns.map(c => `
-      <div class="saved-row" data-id="${c.id}">
-        <span class="name">${escape(c.name)}</span>
-        <span class="muted small">${escape(c.season_type)} · ${fmtDate(c.started_at)} ${c.is_active ? "· active" : ""}</span>
-        ${!c.is_active ? `<button class="apply">activate</button>` : ""}
-      </div>`).join("");
-
-    $("#campaignBody").innerHTML = `
-      <p class="muted small">A campaign scopes knock-tracking, cooldowns, and exports. Anchor date is what we use to compute voter ages.</p>
-      <label>Campaign name
-        <input type="text" id="campaignName" value="${escape(defaultName)}">
-      </label>
-      <label>Season type
-        <select id="campaignSeason">
-          <option value="spring">Spring</option>
-          <option value="fall">Fall</option>
-          <option value="custom">Custom</option>
-        </select>
-      </label>
-      <label>Anchor date
-        <input type="date" id="campaignAnchor" value="${today.toISOString().slice(0,10)}">
-      </label>
-      <label>School-year label (optional)
-        <input type="text" id="campaignSchoolYear" placeholder="2025–2026">
-      </label>
-      <div class="actions">
-        <button class="btn" id="campaignCancel">Cancel</button>
-        <button class="btn primary" id="campaignCreate">Start</button>
-      </div>
-      <h3 style="margin-top:18px">Past campaigns</h3>
-      <div class="saved-list">${previous || "<div class='muted small'>None yet.</div>"}</div>
-    `;
-    $("#campaignModal").hidden = false;
-    $("#campaignCancel").addEventListener("click", () => $("#campaignModal").hidden = true);
-    $("#campaignCreate").addEventListener("click", async () => {
-      const name = $("#campaignName").value.trim();
-      const season = $("#campaignSeason").value;
-      const anchor = $("#campaignAnchor").value;
-      const sy = $("#campaignSchoolYear").value.trim() || null;
-      if (!name || !anchor) { toast("Name + anchor date required"); return; }
-      // Deactivate any currently-active
-      await supabase.from("campaigns").update({ is_active: false }).eq("user_id", state.user.id).eq("is_active", true);
-      const { data, error } = await supabase.from("campaigns").insert({
-        user_id: state.user.id, name, season_type: season,
-        anchor_date: anchor, school_year_label: sy, is_active: true,
-      }).select().single();
-      if (error) { toast(error.message); return; }
-      await supabase.from("user_preferences").update({ default_campaign_id: data.id }).eq("user_id", state.user.id);
-      $("#campaignModal").hidden = true;
-      await loadCampaigns();
-      await loadEverything();
-      render();
-      toast(`Campaign "${name}" started`);
-    });
-    $$("#campaignBody .apply").forEach(b => b.addEventListener("click", async () => {
-      const id = b.closest(".saved-row").dataset.id;
-      await supabase.from("campaigns").update({ is_active: false }).eq("user_id", state.user.id).eq("is_active", true);
-      await supabase.from("campaigns").update({ is_active: true }).eq("id", id);
-      $("#campaignModal").hidden = true;
-      await loadCampaigns();
-      await loadEverything();
-      render();
-    }));
   }
 
   start();

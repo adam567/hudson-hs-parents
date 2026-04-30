@@ -319,6 +319,92 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
   box-shadow: var(--shadow);
 }
 
+/* View toggle (Map | List) -------------------------------------------- */
+.view-toggle { display: inline-flex; border: 1px solid var(--rule-strong); border-radius: 6px; overflow: hidden; }
+.view-toggle .vt {
+  appearance: none; background: var(--surface); border: 0; padding: 5px 14px;
+  font: inherit; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer;
+}
+.view-toggle .vt + .vt { border-left: 1px solid var(--rule); }
+.view-toggle .vt.active { background: var(--accent); color: #fff; }
+.view-toggle .vt:hover:not(.active) { background: var(--accent-soft); }
+
+/* List view ----------------------------------------------------------- */
+#listView {
+  flex: 1; min-height: 0; margin: 0 18px 18px;
+  display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--rule);
+  border-radius: 8px; box-shadow: var(--shadow); overflow: hidden;
+}
+.list-toolbar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 14px; border-bottom: 1px solid var(--rule);
+  background: #fdfcf8;
+}
+.list-toolbar .btn { padding: 4px 10px; font-size: 13px; }
+.list-toolbar .btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+.selection-count { font-weight: 600; color: var(--accent-ink); }
+.list-scroll { flex: 1; overflow: auto; }
+
+.hh-table {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+}
+.hh-table thead th {
+  position: sticky; top: 0; background: var(--surface); z-index: 2;
+  text-align: left; font-weight: 600; font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--muted);
+  padding: 8px 10px; border-bottom: 1px solid var(--rule-strong);
+  user-select: none;
+}
+.hh-table thead th.sortable { cursor: pointer; }
+.hh-table thead th.sortable:hover { color: var(--accent-ink); }
+.hh-table thead th.sorted-asc::after  { content: " ▲"; color: var(--accent); }
+.hh-table thead th.sorted-desc::after { content: " ▼"; color: var(--accent); }
+.hh-table thead th.num, .hh-table tbody td.num { text-align: right; }
+.hh-table thead th.check-col, .hh-table tbody td.check-col {
+  width: 28px; padding-left: 14px; padding-right: 4px;
+}
+.hh-table thead th.tags-col, .hh-table tbody td.tags-col { min-width: 120px; }
+
+.hh-table tbody tr { cursor: pointer; }
+.hh-table tbody tr:nth-child(even) { background: #fbfaf6; }
+.hh-table tbody tr:hover { background: var(--accent-soft); }
+.hh-table tbody tr.selected,
+.hh-table tbody tr.selected:nth-child(even) { background: #f0e4c8; }
+.hh-table tbody td {
+  padding: 7px 10px; border-bottom: 1px solid var(--rule);
+  vertical-align: middle;
+}
+.hh-table tbody td.owner { font-weight: 600; }
+.hh-table tbody td.addr { color: var(--muted); }
+
+.tier-badge {
+  display: inline-block; min-width: 28px; padding: 2px 6px; border-radius: 4px;
+  font-size: 11px; font-weight: 700; text-align: center; color: #fff;
+}
+.tier-badge.T1 { background: var(--t1); }
+.tier-badge.T2 { background: var(--t2); }
+.tier-badge.T3 { background: var(--t3); color: #1d1d1f; }
+.tier-badge.T4 { background: var(--t4); }
+.tier-badge.T5 { background: var(--t5); }
+
+.row-tag-chip {
+  display: inline-block; padding: 1px 7px; margin: 0 3px 2px 0;
+  background: var(--accent-soft); color: var(--accent-ink);
+  border: 1px solid #e2d6b3; border-radius: 10px; font-size: 11px; font-weight: 600;
+}
+
+/* Tag list (sidebar) -------------------------------------------------- */
+#tagList .saved-row { cursor: pointer; }
+#tagList .saved-row.active {
+  background: var(--accent-soft); border-color: var(--accent);
+}
+#tagList .tag-count { color: var(--muted); font-size: 12px; margin-left: 8px; }
+
+/* Tag modal body ----------------------------------------------------- */
+.tag-modal-existing { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; max-height: 200px; overflow-y: auto; }
+.tag-modal-existing .chip { font-size: 13px; }
+
 /* Responsive --------------------------------------------------------- */
 @media (max-width: 900px) {
   .app-shell { grid-template-columns: 1fr; height: auto; }
@@ -327,5 +413,6 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
     max-height: 50vh;
   }
   #map { height: 60vh; }
+  #listView { height: 60vh; }
   .drawer { width: 100%; }
 }

@@ -14,7 +14,6 @@
 
 <header id="topbar" hidden>
   <div class="brand">Hudson HS Parents</div>
-  <span class="campaign-pill" id="campaignPill" hidden></span>
   <div class="grow"></div>
   <button class="btn ghost" id="settingsBtn" title="Settings">Settings</button>
   <span class="user" id="userEmail"></span>
@@ -45,23 +44,12 @@
 <!-- ── App ── -->
 <section id="appView" hidden class="app-shell">
 
-  <!-- Off-season banner (shown when no active campaign) -->
-  <div class="card off-season-banner" id="offSeasonBanner" hidden>
-    <div>
-      <strong id="offSeasonTitle">No active campaign</strong>
-      <span class="muted small" id="offSeasonSub"></span>
-    </div>
-    <div class="banner-actions">
-      <button class="btn primary" id="startCampaignBtn">Start a campaign</button>
-      <button class="btn" id="resumeCampaignBtn" hidden>Resume last campaign</button>
-    </div>
-  </div>
-
   <aside class="sidebar" id="sidebar">
 
     <div class="sidebar-tabs">
       <button class="tab active" data-tab="filters">Filters</button>
       <button class="tab" data-tab="cohorts">Cohorts</button>
+      <button class="tab" data-tab="tags">Tags</button>
       <button class="tab" data-tab="areas">Areas</button>
       <button class="tab" data-tab="recipes">Recipes</button>
     </div>
@@ -123,13 +111,6 @@
       </section>
 
       <section class="filter-section">
-        <h3>Knock status</h3>
-        <label class="tier-toggle"><input type="radio" name="knockMode" value="ready" checked> Show ready</label>
-        <label class="tier-toggle"><input type="radio" name="knockMode" value="all"> Show all (ready + cooling)</label>
-        <label class="tier-toggle"><input type="radio" name="knockMode" value="knocked"> Show knocked only</label>
-      </section>
-
-      <section class="filter-section">
         <h3>Search</h3>
         <input type="search" id="filterSearch" placeholder="address or owner name">
       </section>
@@ -160,7 +141,6 @@
           <button class="btn ghost block" data-export="avery5161">Avery 5161 (20/sheet)</button>
           <button class="btn ghost block" data-export="avery5163">Avery 5163 (10/sheet)</button>
           <button class="btn ghost block" data-export="avery5164">Avery 5164 (6/sheet doorhang)</button>
-          <button class="btn ghost block" data-export="pdf">Printable PDF packet</button>
         </div>
       </section>
     </div>
@@ -180,8 +160,16 @@
           <button class="chip" data-cohort="single_adult">Single-adult deprioritized</button>
           <button class="chip" data-cohort="dz_voter">Datazapp + voter</button>
           <button class="chip" data-cohort="dz_only">Datazapp only</button>
-          <button class="chip" data-cohort="cooldown_expired">Cooldown expired</button>
         </div>
+      </section>
+    </div>
+
+    <!-- Tags tab -->
+    <div class="tab-pane" data-pane="tags" hidden>
+      <section class="filter-section">
+        <h3>Tags</h3>
+        <p class="muted small mb">Multi-select rows in List view, then "Tag selection" to apply or create. Click a tag below to filter to its households.</p>
+        <div id="tagList" class="saved-list"></div>
       </section>
     </div>
 
@@ -217,10 +205,42 @@
   <main class="map-area">
     <div class="map-header card">
       <div id="visibleCount" class="muted small">— households visible</div>
+      <div class="view-toggle" role="tablist">
+        <button class="vt active" data-view="map" role="tab" aria-selected="true">Map</button>
+        <button class="vt" data-view="list" role="tab" aria-selected="false">List</button>
+      </div>
       <div class="grow"></div>
       <div id="dataFreshness" class="muted small"></div>
     </div>
     <div id="map"></div>
+    <div id="listView" hidden>
+      <div class="list-toolbar">
+        <span class="muted small" id="listToolbar"></span>
+        <div class="grow"></div>
+        <span class="selection-count muted small" id="selectionCount"></span>
+        <button class="btn" id="tagSelectionBtn" disabled>Tag selection…</button>
+        <button class="btn ghost" id="clearSelectionBtn" disabled>Clear</button>
+      </div>
+      <div class="list-scroll">
+        <table class="hh-table" id="hhTable">
+          <thead>
+            <tr>
+              <th class="check-col"><input type="checkbox" id="selectAllCb" title="Select all visible"></th>
+              <th data-sort="display_name" class="sortable sorted-asc">Owner</th>
+              <th data-sort="situs_address" class="sortable">Address</th>
+              <th data-sort="tier" class="sortable">Tier</th>
+              <th data-sort="market_value" class="sortable num">Value</th>
+              <th data-sort="years_owned" class="sortable num">Yrs</th>
+              <th data-sort="adult_count" class="sortable num">Adults</th>
+              <th data-sort="senior_score" class="sortable num">17–18</th>
+              <th data-sort="datazapp_hit" class="sortable">DZ</th>
+              <th class="tags-col">Tags</th>
+            </tr>
+          </thead>
+          <tbody id="hhTableBody"></tbody>
+        </table>
+      </div>
+    </div>
   </main>
 
 </section>
@@ -249,14 +269,14 @@
   </div>
 </div>
 
-<!-- Campaign modal (start / resume / pick) -->
-<div id="campaignModal" class="modal" hidden>
+<!-- Tag prompt modal -->
+<div id="tagModal" class="modal" hidden>
   <div class="modal-card">
     <div class="modal-head">
-      <h2 id="campaignModalTitle">Start a campaign</h2>
-      <button class="btn ghost" id="closeCampaignModal">Close</button>
+      <h2>Tag selection</h2>
+      <button class="btn ghost" id="closeTagModal">Close</button>
     </div>
-    <div class="modal-body" id="campaignBody"></div>
+    <div class="modal-body" id="tagModalBody"></div>
   </div>
 </div>
 

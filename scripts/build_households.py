@@ -184,6 +184,21 @@ def main() -> None:
     if not rows:
         sys.exit("no households built; refusing to wipe")
 
+    # Dedupe by address_key — multi-parcel addresses (condos, multi-unit, lot
+    # splits) collide on the unique address_key index. Keep the parcel with the
+    # highest market_value as the primary; voter/Datazapp counts are address-
+    # keyed so they're identical across the dropped duplicates.
+    by_ak: dict[str, dict] = {}
+    for r in rows:
+        existing = by_ak.get(r["address_key"])
+        if existing is None or (r.get("market_value") or 0) > (existing.get("market_value") or 0):
+            by_ak[r["address_key"]] = r
+    deduped = list(by_ak.values())
+    if len(deduped) < len(rows):
+        print(f"[households] deduped {len(rows) - len(deduped)} multi-parcel collisions "
+              f"-> {len(deduped)} unique address_keys")
+    rows = deduped
+
     print(f"[households] computed {len(rows)} household rows")
 
     truncate("households")
