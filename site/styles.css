@@ -67,6 +67,8 @@ input, select, textarea {
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+label[title] { cursor: help; }
+.help-icon { color: var(--muted); font-weight: 400; font-size: 11px; cursor: help; }
 .range-row { display: flex; gap: 6px; }
 .range-row input { flex: 1; min-width: 0; }
 
@@ -279,6 +281,26 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
 .fact .k { color: var(--muted); }
 .section-h { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
              color: var(--muted); font-weight: 600; margin: 16px 0 6px; }
+.section-h:first-child { margin-top: 0; }
+
+.tier-rule {
+  background: var(--accent-soft); color: var(--accent-ink);
+  padding: 10px 12px; border-radius: 6px; font-size: 13px; line-height: 1.45;
+  margin-bottom: 8px;
+}
+.check-list { margin-bottom: 12px; }
+.check-row {
+  display: flex; gap: 8px; align-items: baseline;
+  padding: 3px 0; font-size: 13px;
+}
+.check-mark {
+  flex: 0 0 18px; text-align: center; font-weight: 700;
+}
+.check-mark.mark-yes { color: var(--good); }
+.check-mark.mark-no  { color: var(--rule-strong); }
+.check-mark.mark-info { color: var(--muted); }
+
+.fact .k [title] { border-bottom: 1px dotted var(--muted); cursor: help; }
 
 .outcome-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .outcome-row .btn { padding: 6px 10px; font-size: 13px; }

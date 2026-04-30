@@ -63,7 +63,6 @@
     heatLayer: null,
     drawLayer: null,
     drawControl: null,
-    clusterLayer: null,
     visibleSet: [],
     firstLoad: true,
     viewMode: "map",          // "map" | "list"
@@ -126,12 +125,6 @@
       $$("#sidebar [data-tier]").forEach(el => {
         el.checked = enabled.has(el.dataset.tier);
       });
-    }
-    if (state.prefs?.default_basemap) {
-      $("#basemapSelect").value = state.prefs.default_basemap;
-    }
-    if (state.prefs?.default_cluster_target_size) {
-      $("#clusterTargetSize").value = state.prefs.default_cluster_target_size;
     }
   }
 
@@ -374,7 +367,6 @@
     setBasemap(state.prefs?.default_basemap || "light");
     state.markerLayer = L.layerGroup().addTo(state.map);
     state.drawLayer = new L.FeatureGroup().addTo(state.map);
-    state.clusterLayer = L.layerGroup().addTo(state.map);
 
     // Save viewport on moveend (debounced)
     let saveT;
@@ -664,6 +656,50 @@
   let drawerHouseholdId = null;
   $("#closeDrawer").addEventListener("click", () => { $("#drawer").hidden = true; drawerHouseholdId = null; });
 
+  const TIER_RULE = {
+    T1: "Voter file shows a 17- or 18-year-old at this address — a confirmed current senior.",
+    T2: "Datazapp College-Bound match plus two parent-age adults (42–63) plus 8+ years at this address.",
+    T3: "Voter file shows a 19- or 20-year-old at this address — recent grad, kid likely already left.",
+    T4: "Datazapp match plus at least one parent-age adult, but missing the second-adult or tenure signals.",
+    T5: "Datazapp College-Bound match only, with no corroborating voter or adult signals.",
+  };
+
+  function derivationFor(r) {
+    const checks = [];
+    const v17 = r.count_17_18_voters ?? 0;
+    const v19 = r.count_19_20_voters ?? 0;
+    const adults4263 = r.adult_42_63_count ?? 0;
+    const yrs = r.years_owned;
+    const dz = r.datazapp_hit;
+
+    if (r.tier === "T1") {
+      checks.push(["✓", `Voter file shows ${v17} resident${v17 === 1 ? "" : "s"} age 17–18`]);
+    }
+    if (r.tier === "T3") {
+      checks.push(["✓", `Voter file shows ${v19} resident${v19 === 1 ? "" : "s"} age 19–20`]);
+      if (v17 === 0) checks.push(["·", "No 17–18 voter at this address (would be T1)"]);
+    }
+    if (r.tier === "T2" || r.tier === "T4" || r.tier === "T5") {
+      checks.push([dz ? "✓" : "—", "Datazapp College-Bound match"]);
+    }
+    if (r.tier === "T2") {
+      checks.push([adults4263 >= 2 ? "✓" : "—",
+        `${adults4263} parent-age (42–63) adult${adults4263 === 1 ? "" : "s"} at address — need ≥ 2`]);
+      checks.push([(yrs ?? 0) >= 8 ? "✓" : "—",
+        `${yrs ?? "?"} years owned — need ≥ 8`]);
+      if (v17 === 0) checks.push(["·", "No 17–18 voter at this address (would be T1)"]);
+    }
+    if (r.tier === "T4") {
+      checks.push([adults4263 >= 1 ? "✓" : "—",
+        `${adults4263} parent-age (42–63) adult${adults4263 === 1 ? "" : "s"} at address — need ≥ 1`]);
+      checks.push(["·", "Did not meet T2 (needs 2 parent-age adults + 8 yrs owned)"]);
+    }
+    if (r.tier === "T5") {
+      checks.push(["·", "No parent-age adult on voter file (would be T4)"]);
+    }
+    return checks;
+  }
+
   function openDrawer(id) {
     const r = state.targets.find(x => x.household_id === id);
     if (!r) return;
@@ -676,9 +712,13 @@
     const chips = (r.evidence_chips || []).map(c =>
       `<span class="ev-chip ${c.warn ? "warn" : ""}">${escape(c.t)}</span>`).join("");
 
+    const checks = derivationFor(r).map(([mark, txt]) =>
+      `<div class="check-row"><span class="check-mark mark-${mark === "✓" ? "yes" : mark === "—" ? "no" : "info"}">${mark}</span><span>${escape(txt)}</span></div>`
+    ).join("");
+
     const facts = [
       ["Years owned", r.years_owned ?? "unknown"],
-      ["Market value", fmt$(r.market_value)],
+      [`<span title="County-assessed market value from the Summit County fiscal office. Reflects the most recent reappraisal, not a current real-estate appraisal or asking price; actual sale prices typically run higher.">Market value (est.)</span>`, fmt$(r.market_value), true],
       ["Sqft", r.sqft ? r.sqft.toLocaleString() : "—"],
       ["Year built", r.year_built ?? "—"],
       ["Owner-occupied", r.mailing_same_as_situs ? "yes" : "no"],
@@ -691,11 +731,13 @@
     const ownerList = (r.owner_names || []).map(o => `<div class="muted small">${escape(o)}</div>`).join("");
 
     $("#drawerBody").innerHTML = `
-      ${r.why_sentence ? `<div class="why-sentence">${escape(r.why_sentence)}</div>` : ""}
-      <div class="evidence-chips">${chips}</div>
+      <div class="section-h">Why ${r.tier} — ${escape(tierLabel)}?</div>
+      <div class="tier-rule">${escape(TIER_RULE[r.tier] || "")}</div>
+      <div class="check-list">${checks}</div>
+      ${chips ? `<div class="evidence-chips">${chips}</div>` : ""}
 
       <div class="section-h">Facts</div>
-      ${facts.map(([k,v]) => `<div class="fact"><span class="k">${k}</span><span>${escape(String(v))}</span></div>`).join("")}
+      ${facts.map(([k,v,raw]) => `<div class="fact"><span class="k">${raw ? k : escape(k)}</span><span>${escape(String(v))}</span></div>`).join("")}
 
       <div class="section-h">Owners</div>
       ${ownerList || "<div class='muted small'>—</div>"}
@@ -759,12 +801,6 @@
 
     // Map layers
     $("#layerHeatmap").addEventListener("change", () => drawMap());
-    $("#basemapSelect").addEventListener("change", () => {
-      setBasemap($("#basemapSelect").value);
-      supabase.from("user_preferences")
-        .update({ default_basemap: $("#basemapSelect").value })
-        .eq("user_id", state.user.id);
-    });
 
     // Draw controls
     $("#drawPolygonBtn").addEventListener("click", () => {
@@ -813,12 +849,6 @@
       toast("Recipe saved");
     });
 
-    // Cluster suggestions
-    $("#suggestPocketsBtn").addEventListener("click", suggestPockets);
-    $("#clearPocketsBtn").addEventListener("click", () => {
-      state.clusterLayer.clearLayers();
-    });
-
     // Export menu
     $("#exportMenuBtn").addEventListener("click", () => {
       const m = $("#exportMenu");
@@ -830,10 +860,6 @@
         $("#exportMenu").hidden = true;
       });
     });
-
-    // Settings
-    $("#settingsBtn").addEventListener("click", openSettings);
-    $("#closeSettings").addEventListener("click", () => $("#settingsModal").hidden = true);
 
     // View toggle (Map | List)
     $$(".view-toggle .vt").forEach(b => b.addEventListener("click", () => setViewMode(b.dataset.view)));
@@ -913,74 +939,6 @@
     state.visibleSet = state.targets.filter(passesFilters);
     if (state.viewMode === "list") drawList();
     else drawMap();
-  }
-
-  // ── Cluster suggestions (DBSCAN-lite) ───────────────────────────────
-  function suggestPockets() {
-    state.clusterLayer.clearLayers();
-    const target = parseInt($("#clusterTargetSize").value, 10) || 22;
-    const points = state.visibleSet.filter(r => r.lat && r.lng);
-    if (points.length < 5) { toast("Not enough points to cluster"); return; }
-
-    // Greedy density-driven grouping by spatial proximity, target N per cluster.
-    const used = new Set();
-    const clusters = [];
-    while (used.size < points.length) {
-      const seed = points.find(p => !used.has(p.household_id));
-      if (!seed) break;
-      const sorted = points
-        .filter(p => !used.has(p.household_id))
-        .map(p => ({ p, d: dist(seed, p) }))
-        .sort((a, b) => a.d - b.d);
-      const member = sorted.slice(0, target).map(x => x.p);
-      member.forEach(m => used.add(m.household_id));
-      clusters.push(member);
-    }
-
-    clusters.forEach((cluster, idx) => {
-      // Convex hull (Andrew monotone chain)
-      const pts = cluster.map(c => [c.lng, c.lat]);
-      const hull = convexHull(pts);
-      if (hull.length < 3) return;
-      const ll = hull.map(([lng, lat]) => [lat, lng]);
-      const t1 = cluster.filter(c => c.tier === "T1").length;
-      const t2 = cluster.filter(c => c.tier === "T2").length;
-      const t3 = cluster.filter(c => c.tier === "T3").length;
-      const score = cluster.reduce((s, c) => s + (c.evidence_score || 0), 0);
-      const opacity = Math.min(0.25, 0.05 + score / 5000);
-      const poly = L.polygon(ll, {
-        color: "#6b4f2a", weight: 1.5, fillOpacity: opacity, fillColor: "#6b4f2a",
-        className: "cluster-poly",
-      });
-      poly.bindTooltip(
-        `<strong>Cluster ${idx + 1}</strong><br>${cluster.length} doors · T1: ${t1} · T2: ${t2} · T3: ${t3}`,
-        { sticky: true, className: "cluster-label" }
-      );
-      poly.addTo(state.clusterLayer);
-    });
-    toast(`${clusters.length} pocket${clusters.length === 1 ? "" : "s"} suggested`);
-  }
-  function dist(a, b) {
-    const dx = a.lat - b.lat, dy = a.lng - b.lng;
-    return Math.sqrt(dx*dx + dy*dy);
-  }
-  function convexHull(points) {
-    const pts = points.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-    if (pts.length < 3) return pts;
-    const cross = (O, A, B) => (A[0]-O[0])*(B[1]-O[1]) - (A[1]-O[1])*(B[0]-O[0]);
-    const lower = [];
-    for (const p of pts) {
-      while (lower.length >= 2 && cross(lower[lower.length-2], lower[lower.length-1], p) <= 0) lower.pop();
-      lower.push(p);
-    }
-    const upper = [];
-    for (let i = pts.length - 1; i >= 0; i--) {
-      const p = pts[i];
-      while (upper.length >= 2 && cross(upper[upper.length-2], upper[upper.length-1], p) <= 0) upper.pop();
-      upper.push(p);
-    }
-    upper.pop(); lower.pop();
-    return lower.concat(upper);
   }
 
   // ── Exports ─────────────────────────────────────────────────────────

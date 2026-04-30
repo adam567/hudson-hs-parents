@@ -15,7 +15,7 @@
 <header id="topbar" hidden>
   <div class="brand">Hudson HS Parents</div>
   <div class="grow"></div>
-  <button class="btn ghost" id="settingsBtn" title="Settings">Settings</button>
+  <button class="btn ghost" id="settingsBtn" title="Settings" hidden>Settings</button>
   <span class="user" id="userEmail"></span>
   <button class="btn ghost" id="signOutBtn">Sign out</button>
 </header>
@@ -63,7 +63,7 @@
 
       <section class="filter-section">
         <h3>Property</h3>
-        <label>Market value
+        <label title="County-assessed market value from the Summit County fiscal office. Reflects the most recent reappraisal, not a current real-estate appraisal or asking price; actual sale prices typically run higher.">Market value (est.) <span class="help-icon">ⓘ</span>
           <div class="range-row">
             <input type="number" id="filterMinValue" placeholder="min $" step="50000">
             <input type="number" id="filterMaxValue" placeholder="max $" step="50000">
@@ -111,19 +111,7 @@
 
       <section class="filter-section">
         <h3>Map layers</h3>
-        <label class="tier-toggle"><input type="checkbox" id="layerHeatmap"> Density heatmap</label>
-        <label class="tier-toggle">Basemap
-          <select id="basemapSelect">
-            <option value="light" selected>Muted light</option>
-            <option value="street">Standard street</option>
-            <option value="satellite">Satellite</option>
-          </select>
-        </label>
-        <label class="tier-toggle">Cluster suggestions
-          <input type="number" id="clusterTargetSize" min="10" max="60" value="22" step="1" style="width:64px">
-        </label>
-        <button class="btn" id="suggestPocketsBtn">Suggest pockets</button>
-        <button class="btn ghost" id="clearPocketsBtn">Clear</button>
+        <label class="tier-toggle"><input type="checkbox" id="layerHeatmap" checked> Density heatmap</label>
       </section>
 
       <section class="filter-section">
