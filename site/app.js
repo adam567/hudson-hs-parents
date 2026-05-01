@@ -305,6 +305,15 @@
     const cohorts = state.filters.cohorts;
     if (!cohorts.size) return true;
     const checks = {
+      // Strongest senior signal: voter file shows a 17/18yo at the address
+      // AND the earliest of those reg dates is within the last 24 months.
+      // Captures kids who registered around their 17th/18th birthday — the
+      // textbook current-year senior who's electorally active.
+      newly_registered_senior: () => {
+        if (!r.has_17_18_voter || !r.senior_reg_date_min) return false;
+        const cutoff = Date.now() - 730 * 24 * 60 * 60 * 1000;
+        return new Date(r.senior_reg_date_min).getTime() >= cutoff;
+      },
       recent_grads: () => r.has_19_20_voter,
       long_tenure_15: () => (r.years_owned ?? 0) >= 15,
       long_tenure_25: () => (r.years_owned ?? 0) >= 25,
