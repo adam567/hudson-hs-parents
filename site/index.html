@@ -54,7 +54,17 @@
         <h3>Senior leads</h3>
         <p class="muted small mb">Ordered by priority. Larger, brighter dots = stronger leads.</p>
         <label class="tier-toggle"><input type="checkbox" data-tier="T1" checked> <span class="pin-preview T1"></span> <span class="tier-label-text"><span class="tier-name">Confirmed Senior</span><span class="tier-basis muted small">A senior-age student is registered to vote here.</span></span> <span class="count" data-count="T1">—</span></label>
-        <label class="tier-toggle"><input type="checkbox" data-tier="T2" checked> <span class="pin-preview T2"></span> <span class="tier-label-text"><span class="tier-name">Likely Senior — Family on File</span><span class="tier-basis muted small">Two parent-age voters at the address PLUS at least one more adult voter (an adult-age child still at home is the typical case). 8+ years owned, owner lives here.</span></span> <span class="count" data-count="T2">—</span></label>
+        <label class="tier-toggle"><input type="checkbox" data-tier="T2" checked> <span class="pin-preview T2"></span> <span class="tier-label-text"><span class="tier-name">Empty-Nester Window — Kids in their 20s on File</span><span class="tier-basis muted small">Parent-age couple plus 1–2 adult kids registered at the address (late college / recently launched). 8+ years owned, owner lives here. Lifecycle signal — the family looks to be in the empty-nester transition.</span></span> <span class="count" data-count="T2">—</span></label>
+        <div class="tier-suboption muted small">
+          <label for="launchingCutoff">Cap launching-window age at</label>
+          <select id="launchingCutoff">
+            <option value="22">22 — late college only (default)</option>
+            <option value="23">23</option>
+            <option value="24">24</option>
+            <option value="25">25 — include older adult kids on the rolls</option>
+          </select>
+          <span class="muted small">Households with adult kids older than this on file drop out of the empty-nester tier.</span>
+        </div>
         <label class="tier-toggle"><input type="checkbox" data-tier="T2c"> <span class="pin-preview T2c"></span> <span class="tier-label-text"><span class="tier-name">Couple in Parent Age Range</span><span class="tier-basis muted small">Exactly two parent-age adults (42-63), 8+ years owned, owner-occupied. No other adults on file — could be empty-nesters already, parents-of-younger-kid, or no kids at all. Weaker signal.</span></span> <span class="count" data-count="T2c">—</span></label>
       </section>
 

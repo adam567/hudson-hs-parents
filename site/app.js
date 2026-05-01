@@ -55,6 +55,12 @@
       adultCount: "",
       mailingMode: "",
       search: "",
+      // Upper bound on the age of "extra" adult voters (those outside the
+      // 42-63 parent-age band) for a household to qualify for the T2
+      // empty-nester-window tier. Default 22 = late college only; user can
+      // raise to 25 to include older adult kids still on the rolls. Server
+      // gates T2 broadly at 21-25; this filter tightens client-side.
+      launchingCutoff: Number(localStorage.getItem("launching_cutoff")) || 22,
       drawnArea: null,           // {type:'Polygon', coordinates:[[[lng,lat],...]]}
       // Entity-owned households (trusts, LLCs) where voter records DON'T
       // resolve a natural-person resident: hidden by default. The agent
@@ -227,7 +233,13 @@
 
   function drawTierCounts() {
     const counts = { T1: 0, T2: 0, T2c: 0, T3: 0 };
-    state.targets.forEach(r => { if (counts[r.tier] != null) counts[r.tier]++; });
+    const cutoff = state.filters.launchingCutoff;
+    state.targets.forEach(r => {
+      if (counts[r.tier] == null) return;
+      if (r.tier === "T2" && r.max_non_parent_adult_age != null
+          && r.max_non_parent_adult_age > cutoff) return;
+      counts[r.tier]++;
+    });
     Object.entries(counts).forEach(([t, n]) => {
       const el = $(`[data-count="${t}"]`);
       if (el) el.textContent = n;
@@ -264,6 +276,8 @@
   function passesFilters(r) {
     if (!state.filters.tiers[r.tier]) return false;
     const f = state.filters;
+    if (r.tier === "T2" && r.max_non_parent_adult_age != null
+        && r.max_non_parent_adult_age > f.launchingCutoff) return false;
     if (f.minValue != null && (r.market_value ?? 0) < f.minValue) return false;
     if (f.maxValue != null && (r.market_value ?? 0) > f.maxValue) return false;
     if (f.minYears != null && (r.years_owned ?? 0) < f.minYears) return false;
@@ -567,7 +581,7 @@
   // the DB; this map is the single source of truth for what the user sees.
   const TIER_LABEL = {
     T1:  "Confirmed Senior",
-    T2:  "Likely Senior — Family on File",
+    T2:  "Empty-Nester Window — Kids in their 20s on File",
     T2c: "Couple in Parent Age Range",
     T3:  "Recent Grad",
   };
@@ -946,8 +960,13 @@
       basisFn: r => `A 17- or 18-year-old is registered to vote at this address${r.count_17_18_voters > 1 ? ` (${r.count_17_18_voters} on file)` : ""}.`,
     },
     T2: {
-      verdict: "A high-school senior likely lives here — inferred.",
-      basisFn: r => `${r.adult_count} adults are registered at this address: a parent-age couple (42–63) plus at least one more adult on file — typically an adult-age child still at home. ${r.years_owned ?? "8+"} years owned, owner-occupied.`,
+      verdict: "Likely launching kids — empty-nester window.",
+      basisFn: r => {
+        const extras = (r.adult_count ?? 0) - 2;
+        const extraWord = extras === 1 ? "adult-age child" : "adult-age children";
+        return `Parent-age couple (42–63) plus ${extras} ${extraWord} on file (age 21–25 — late college / recently launched). ${r.years_owned ?? "8+"} years owned, owner-occupied. The family looks to be in or just past the empty-nester transition.`;
+      },
+      eyebrow: "Lifecycle signal — not a confirmed senior",
     },
     T2c: {
       verdict: "Maybe — a parent-age couple lives here.",
@@ -967,7 +986,7 @@
   // Per-tier "what we couldn't verify" caveat. Empty for T1 (verified).
   const TIER_CAVEAT = {
     T1: "",
-    T2: "No kid is registered to vote at this address. The third-or-more adult on file is the indirect signal — usually an adult-age child still living at home, but could also be an extended-family member.",
+    T2: "No high-school-age kid is registered here. The signal is lifecycle, not enrollment: a parent-age couple plus 1–2 adult kids in their early 20s on the rolls means the family is in the launching window. Households with adult kids 26+ or 3+ extras (long-launched or multi-generational) are excluded from this tier.",
     T2c: "Just a couple in the right age range — the voter file shows no other adults at the address, so we have no direct signal of children. Treat as a low-confidence lead worth a second pass before a mailer goes out.",
     T3: "Their kid is age 19–20 and may have already left home. This isn't a current senior — it's an adjacent lead.",
   };
@@ -1399,6 +1418,18 @@
         persistVisibleTiers();
       });
     });
+
+    // Launching-window cutoff (controls T2 inclusion of older adult kids).
+    const launchingCutoffEl = $("#launchingCutoff");
+    if (launchingCutoffEl) {
+      launchingCutoffEl.value = String(state.filters.launchingCutoff);
+      launchingCutoffEl.addEventListener("change", () => {
+        const v = Number(launchingCutoffEl.value) || 22;
+        state.filters.launchingCutoff = v;
+        try { localStorage.setItem("launching_cutoff", String(v)); } catch (_) {}
+        render();
+      });
+    }
 
     // Property filters
     const numberInputs = ["filterMinValue", "filterMaxValue", "filterMinYears", "filterMaxYears",

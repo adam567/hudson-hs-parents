@@ -116,6 +116,17 @@ def main() -> None:
         adult_count = sum(1 for a in ages if a >= 21)
         adult_42_63 = sum(1 for a in ages if 42 <= a <= 63)
         adult_45_58 = sum(1 for a in ages if 45 <= a <= 58)
+        # Launching-window band: an extra adult voter in this age range is
+        # consistent with a recent grad / college sibling of a current senior.
+        # 26+ skews to "kids fully launched / multi-generational" — used to
+        # disqualify T2 since those households are not current-senior parents.
+        adult_21_25 = sum(1 for a in ages if 21 <= a <= 25)
+        adult_26plus = sum(1 for a in ages if a >= 26)
+        # Oldest extra-adult voter (any adult outside the parent-age band).
+        # Frontend uses this to let the user tighten the launching-window
+        # cutoff (default 22) without re-running the migration.
+        non_parent_extras = [a for a in ages if a >= 21 and not (42 <= a <= 63)]
+        max_extra_age = max(non_parent_extras) if non_parent_extras else None
 
         # Same-surname youth-to-adult check
         youth_surnames = {(v.get("last_name") or "").strip().upper() for v in vs
@@ -176,6 +187,9 @@ def main() -> None:
             "oldest_voter_birth_year": oldest_by,
             "adult_42_63_count": adult_42_63,
             "adult_45_58_count": adult_45_58,
+            "adult_21_25_count": adult_21_25,
+            "adult_26plus_count": adult_26plus,
+            "max_non_parent_adult_age": max_extra_age,
             "adult_count": adult_count,
             "same_surname_youth_to_adult": same_surname,
             "senior_reg_date_min": senior_reg_min,

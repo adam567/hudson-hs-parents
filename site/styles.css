@@ -192,6 +192,26 @@ label[title] { cursor: help; }
 /* Adjacent-leads section visually quieter (hairline top rule) */
 .adjacent-section { padding-top: 14px; border-top: 1px solid var(--rule); }
 
+/* Sub-option under a tier toggle (e.g. launching-window age cutoff). Indented
+   to sit under the toggle's label column without competing with the badge. */
+.tier-suboption {
+  margin: 4px 0 8px 32px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.tier-suboption label { white-space: nowrap; }
+.tier-suboption select {
+  font: inherit;
+  padding: 2px 6px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--bg);
+  color: inherit;
+}
+.tier-suboption .muted { flex-basis: 100%; }
+
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {
   padding: 5px 10px; font-size: 12px; font-weight: 500;
