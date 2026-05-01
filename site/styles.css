@@ -598,15 +598,6 @@ label[title] { cursor: help; }
 }
 #tagList .tag-export-menu .btn { padding: 5px 10px; font-size: 13px; }
 
-/* Auth quick-login row ----------------------------------------------- */
-.quick-login {
-  margin-top: 10px;
-  display: flex; gap: 8px;
-  border-top: 1px solid var(--rule);
-  padding-top: 10px;
-}
-.quick-login .btn { flex: 1; }
-
 /* Tag modal body ----------------------------------------------------- */
 .tag-modal-existing { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; max-height: 200px; overflow-y: auto; }
 .tag-modal-existing .chip { font-size: 13px; }

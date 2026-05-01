@@ -87,25 +87,24 @@
   };
 
   // ── Auth ────────────────────────────────────────────────────────────
-  // Quick-login profiles: lets a household member sign in without typing.
-  // Credentials are not secret — the threat model is URL-obscurity, since
-  // nothing on this site warrants stronger auth (public-records data only).
-  // Add a profile here, then either click the labeled button on the auth
-  // screen or bookmark `?u=<key>` for a zero-click sign-in.
+  // Single-button auth. Click "Sign in", get prompted for a password, in.
+  // QUICK_LOGINS holds the active account; PASSWORD_SHORTCUTS lets the
+  // user type a short alias (e.g. "ts") in the prompt that we expand to
+  // the actual Supabase password before submitting.
+  // Threat model: URL-obscurity. Anyone who finds the URL also finds the
+  // identifier embedded in the JS bundle — that's accepted because the
+  // data here is all public records.
   const QUICK_LOGINS = {
     ts: { label: "Tiffany", email: "tiffanyscavone@gmail.com", password: "tststs" },
   };
-  // Aliases let her type just "ts" in the email field if the form gets reset.
-  const EMAIL_ALIASES = Object.fromEntries(
-    Object.entries(QUICK_LOGINS).map(([k, v]) => [k, v.email])
-  );
+  const ACTIVE_PROFILE = "ts";
+  const PASSWORD_SHORTCUTS = { ts: "tststs" };
 
   async function doSignIn() {
     $("#authErr").textContent = "";
-    let email = $("#email").value.trim();
+    const email = $("#email").value.trim();
     const password = $("#password").value;
-    if (!email || !password) { $("#authErr").textContent = "Email and password required."; return; }
-    if (EMAIL_ALIASES[email]) email = EMAIL_ALIASES[email];
+    if (!email || !password) { $("#authErr").textContent = "Sign-in failed: missing credentials."; return; }
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { $("#authErr").textContent = error.message; return; }
     await onSignedIn();
@@ -117,19 +116,18 @@
     $("#password").value = p.password;
     doSignIn();
   }
-  $("#signInBtn").addEventListener("click", doSignIn);
-  $("#password").addEventListener("keydown", (e) => { if (e.key === "Enter") doSignIn(); });
-  $("#email").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#password").focus(); });
-  // Typing a quick-login key in the email field auto-fills the password so
-  // she doesn't have to remember (or type) it. Triggers on every input
-  // change; if she clears or edits the field to something non-matching, the
-  // password is left alone (no surprise blank-out).
-  $("#email").addEventListener("input", () => {
-    const k = $("#email").value.trim().toLowerCase();
-    const p = QUICK_LOGINS[k];
-    if (p) $("#password").value = p.password;
-  });
-  $("#quickTsBtn")?.addEventListener("click", () => quickSignIn("ts"));
+  function promptedSignIn() {
+    const profile = QUICK_LOGINS[ACTIVE_PROFILE];
+    if (!profile) return;
+    const input = window.prompt("Password:");
+    if (input === null) return;            // cancelled
+    const trimmed = input.trim();
+    const password = PASSWORD_SHORTCUTS[trimmed.toLowerCase()] || trimmed;
+    $("#email").value = profile.email;
+    $("#password").value = password;
+    doSignIn();
+  }
+  $("#signInBtn").addEventListener("click", promptedSignIn);
   $("#signOutBtn").addEventListener("click", async () => {
     await supabase.auth.signOut(); location.reload();
   });
@@ -137,7 +135,7 @@
   async function start() {
     const { data: { session } } = await supabase.auth.getSession();
     if (session) { await onSignedIn(); return; }
-    // Bookmark a URL with `?u=ts` for zero-click sign-in.
+    // Bookmark `?u=ts` for zero-click sign-in (no prompt).
     const which = new URLSearchParams(location.search).get("u");
     if (which && QUICK_LOGINS[which]) {
       quickSignIn(which);
