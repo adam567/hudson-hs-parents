@@ -83,25 +83,52 @@
   };
 
   // ── Auth ────────────────────────────────────────────────────────────
+  // Quick-login profiles: lets a household member sign in without typing.
+  // Credentials are not secret — the threat model is URL-obscurity, since
+  // nothing on this site warrants stronger auth (public-records data only).
+  // Add a profile here, then either click the labeled button on the auth
+  // screen or bookmark `?u=<key>` for a zero-click sign-in.
+  const QUICK_LOGINS = {
+    ts: { label: "Tiffany", email: "tiffanyscavone@gmail.com", password: "tststs" },
+  };
+  // Aliases let her type just "ts" in the email field if the form gets reset.
+  const EMAIL_ALIASES = Object.fromEntries(
+    Object.entries(QUICK_LOGINS).map(([k, v]) => [k, v.email])
+  );
+
   async function doSignIn() {
     $("#authErr").textContent = "";
-    const email = $("#email").value.trim();
+    let email = $("#email").value.trim();
     const password = $("#password").value;
     if (!email || !password) { $("#authErr").textContent = "Email and password required."; return; }
+    if (EMAIL_ALIASES[email]) email = EMAIL_ALIASES[email];
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { $("#authErr").textContent = error.message; return; }
     await onSignedIn();
   }
+  function quickSignIn(key) {
+    const p = QUICK_LOGINS[key];
+    if (!p) return;
+    $("#email").value = p.email;
+    $("#password").value = p.password;
+    doSignIn();
+  }
   $("#signInBtn").addEventListener("click", doSignIn);
   $("#password").addEventListener("keydown", (e) => { if (e.key === "Enter") doSignIn(); });
   $("#email").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#password").focus(); });
+  $("#quickTsBtn")?.addEventListener("click", () => quickSignIn("ts"));
   $("#signOutBtn").addEventListener("click", async () => {
     await supabase.auth.signOut(); location.reload();
   });
 
   async function start() {
     const { data: { session } } = await supabase.auth.getSession();
-    if (session) await onSignedIn();
+    if (session) { await onSignedIn(); return; }
+    // Bookmark a URL with `?u=ts` for zero-click sign-in.
+    const which = new URLSearchParams(location.search).get("u");
+    if (which && QUICK_LOGINS[which]) {
+      quickSignIn(which);
+    }
   }
 
   async function onSignedIn() {
