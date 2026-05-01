@@ -8,7 +8,7 @@
 <title>Hudson HS Parents</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" crossorigin="">
-<link rel="stylesheet" href="styles.css?v=lex3">
+<link rel="stylesheet" href="styles.css?v=lex4">
 </head>
 <body>
 
@@ -47,7 +47,6 @@
       <button class="tab" data-tab="cohorts">Cohorts</button>
       <button class="tab" data-tab="tags">Tags</button>
       <button class="tab" data-tab="areas">Areas</button>
-      <button class="tab" data-tab="recipes">Recipes</button>
     </div>
 
     <!-- Filters tab -->
@@ -201,19 +200,6 @@
       </section>
     </div>
 
-    <!-- Saved recipes tab -->
-    <div class="tab-pane" data-pane="recipes" hidden>
-      <section class="filter-section">
-        <h3>Saved filter recipes</h3>
-        <p class="muted small mb">Save the current filter set as a named recipe.</p>
-        <div class="recipe-row">
-          <input type="text" id="recipeName" placeholder="e.g. Spring 2026 confirmed seniors">
-          <button class="btn primary" id="saveRecipeBtn">Save</button>
-        </div>
-        <div id="savedRecipeList" class="saved-list"></div>
-      </section>
-    </div>
-
   </aside>
 
   <main class="map-area">
@@ -241,9 +227,11 @@
           <thead>
             <tr>
               <th class="check-col"><input type="checkbox" id="selectAllCb" title="Select all visible"></th>
-              <th data-sort="display_name" class="sortable sorted-asc">Owner</th>
+              <th data-sort="tier" class="sortable sorted-asc">Lead</th>
+              <th data-sort="display_name" class="sortable">Owner</th>
+              <th data-sort="parent_1" class="sortable">Parent 1</th>
+              <th data-sort="parent_2" class="sortable">Parent 2</th>
               <th data-sort="situs_address" class="sortable">Address</th>
-              <th data-sort="tier" class="sortable">Lead</th>
               <th data-sort="market_value" class="sortable num">Value</th>
               <th data-sort="years_owned" class="sortable num">Yrs</th>
               <th data-sort="adult_count" class="sortable num">Adults</th>
@@ -305,7 +293,7 @@
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="app.js?v=lex3"></script>
+<script src="app.js?v=lex4"></script>
 
 </body>
 </html>

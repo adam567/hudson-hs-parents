@@ -603,11 +603,26 @@ label[title] { cursor: help; }
 }
 
 /* Tag list (sidebar) -------------------------------------------------- */
-#tagList .saved-row { cursor: pointer; }
+#tagList .saved-row {
+  cursor: pointer;
+  flex-wrap: wrap;
+}
 #tagList .saved-row.active {
   background: var(--accent-soft); border-color: var(--accent);
 }
 #tagList .tag-count { color: var(--muted); font-size: 12px; margin-left: 8px; }
+#tagList .saved-row .export {
+  margin-left: 4px; padding: 2px 8px; font-size: 12px; color: var(--accent-ink);
+  border-radius: 4px;
+}
+#tagList .saved-row .export:hover { background: var(--accent-soft); color: var(--accent-ink); }
+#tagList .tag-export-menu {
+  flex: 0 0 100%;
+  margin-top: 6px; padding: 4px;
+  display: flex; flex-direction: column; gap: 2px;
+  border: 1px solid var(--rule); border-radius: 6px; background: #fdfcf8;
+}
+#tagList .tag-export-menu .btn { padding: 5px 10px; font-size: 13px; }
 
 /* Tag modal body ----------------------------------------------------- */
 .tag-modal-existing { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; max-height: 200px; overflow-y: auto; }

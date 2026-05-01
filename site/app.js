@@ -40,7 +40,6 @@
     prefs: null,
     targets: [],          // v_targets rows
     savedAreas: [],
-    savedRecipes: [],
     tags: [],             // [{id, name, household_ids:[...], notes, created_at, updated_at}]
     tagsByHh: new Map(),  // household_id -> [tag objects]
     selectedIds: new Set(),
@@ -71,7 +70,9 @@
     visibleSet: [],
     firstLoad: true,
     viewMode: "map",          // "map" | "list"
-    sort: { col: "display_name", dir: "asc" },
+    // Default: strongest lead at the top. Tier rank ascending (T1 first),
+    // tiebreak on evidence_score descending — handled in compareRows.
+    sort: { col: "tier", dir: "asc" },
   };
 
   // ── Auth ────────────────────────────────────────────────────────────
@@ -164,18 +165,15 @@
   async function loadEverything() {
     const results = await Promise.all([
       supabase.from("v_targets").select("*"),
-      supabase.from("saved_filter_recipes").select("*").order("name"),
       supabase.from("saved_areas").select("*").order("name"),
       supabase.from("tags").select("*").order("name"),
     ]);
     if (results[0].error) toast("targets: " + results[0].error.message);
     else state.targets = (results[0].data || []).filter(r => r.tier && r.tier !== "TX");
-    state.savedRecipes = results[1].data || [];
-    state.savedAreas = results[2].data || [];
-    state.tags = results[3].data || [];
+    state.savedAreas = results[1].data || [];
+    state.tags = results[2].data || [];
     rebuildTagsByHh();
     drawTierCounts();
-    drawSavedRecipes();
     drawSavedAreas();
     drawSavedTags();
     drawFreshness();
@@ -203,32 +201,6 @@
     Object.entries(counts).forEach(([t, n]) => {
       const el = $(`[data-count="${t}"]`);
       if (el) el.textContent = n;
-    });
-  }
-
-  function drawSavedRecipes() {
-    const list = $("#savedRecipeList");
-    list.innerHTML = state.savedRecipes.map(r => `
-      <div class="saved-row" data-id="${r.id}">
-        <span class="name">${escape(r.name)}</span>
-        <button class="apply" title="Apply">apply</button>
-        <button class="del" title="Delete">×</button>
-      </div>`).join("") || `<div class="muted small">No saved recipes yet.</div>`;
-    $$("#savedRecipeList .apply").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const id = btn.closest(".saved-row").dataset.id;
-        const rec = state.savedRecipes.find(r => r.id === id);
-        if (rec) applyFilterRecipe(rec.filter_state);
-      });
-    });
-    $$("#savedRecipeList .del").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const id = btn.closest(".saved-row").dataset.id;
-        if (!confirm("Delete this recipe?")) return;
-        await supabase.from("saved_filter_recipes").delete().eq("id", id);
-        state.savedRecipes = state.savedRecipes.filter(r => r.id !== id);
-        drawSavedRecipes();
-      });
     });
   }
 
@@ -334,15 +306,6 @@
     return inside;
   }
 
-  function applyFilterRecipe(s) {
-    if (!s) return;
-    Object.assign(state.filters, s);
-    state.filters.cohorts = new Set(s.cohorts || []);
-    syncFilterUI();
-    render();
-    toast("Recipe applied");
-  }
-
   function applyDrawnArea(geo) {
     state.filters.drawnArea = geo;
     state._closeSidebar?.();
@@ -371,10 +334,6 @@
     $("#filterAdultCount").value = state.filters.adultCount;
     $("#filterMailing").value = state.filters.mailingMode;
     $("#filterSearch").value = state.filters.search;
-  }
-
-  function snapshotFilterState() {
-    return { ...state.filters, cohorts: Array.from(state.filters.cohorts), drawnArea: null };
   }
 
   // ── Map ──────────────────────────────────────────────────────────────
@@ -509,10 +468,23 @@
     let av, bv;
     if (col === "tier") {
       // Sort the "Lead" column by user-priority rank (T1 > T2 > T4 > T2b > T5 > T3),
-      // not alphabetically. Unknown tiers park at the bottom.
+      // not alphabetically. Tiebreak on evidence_score (highest first) so the
+      // default "strongest lead at the top" works after a single click.
       av = TIER_RANK[a.tier] ?? 99;
       bv = TIER_RANK[b.tier] ?? 99;
-      return (av - bv) * sgn;
+      if (av !== bv) return (av - bv) * sgn;
+      return ((b.evidence_score ?? -Infinity) - (a.evidence_score ?? -Infinity)) * sgn;
+    }
+    if (col === "parent_1" || col === "parent_2") {
+      const idx = col === "parent_1" ? 0 : 1;
+      av = parentFirstName(a, idx).toUpperCase();
+      bv = parentFirstName(b, idx).toUpperCase();
+      // Empty parent names sort last regardless of direction
+      if (!av && bv) return 1;
+      if (av && !bv) return -1;
+      if (av < bv) return -1 * sgn;
+      if (av > bv) return  1 * sgn;
+      return 0;
     }
     if (col === "senior_score") {
       av = (a.count_17_18_voters ?? 0) * 10 + (a.count_19_20_voters ?? 0);
@@ -640,6 +612,23 @@
     if (i <= 0) return s;
     return `${s.slice(i + 1)} ${s.slice(0, i)}`;
   }
+  // First-name only for the parent columns. Skips middle initials. For
+  // entity-owned parcels with resolved residents, reads from resident_names;
+  // otherwise from the parcel's owner_names ("LASTNAME FIRSTNAME [MIDDLE]").
+  function parentFirstName(r, idx) {
+    if (isInstitutionalOwner(r) && hasResidentMatch(r)) {
+      const name = r.resident_names[idx];
+      if (!name) return "";
+      const parts = String(name).trim().split(/\s+/);
+      return parts[0] || "";
+    }
+    const raw = (r.owner_names || [])[idx];
+    if (!raw) return "";
+    const parts = String(raw).trim().split(/\s+/);
+    if (parts.length < 2) return "";
+    return titleCase(parts[1]);  // second token = first name; drops middle/suffix
+  }
+
   function tableOwnerCell(r) {
     if (isInstitutionalOwner(r) && hasResidentMatch(r)) {
       // Substitute the resident; tag with ⓘ so she sees this is a derived name.
@@ -658,18 +647,22 @@
     state.listOrder = sorted;     // ordered by current sort, used for shift-click range
     const body = $("#hhTableBody");
     if (!sorted.length) {
-      body.innerHTML = `<tr><td colspan="10" class="muted small" style="padding:24px;text-align:center">No households match the current filters.</td></tr>`;
+      body.innerHTML = `<tr><td colspan="12" class="muted small" style="padding:24px;text-align:center">No households match the current filters.</td></tr>`;
     } else {
       body.innerHTML = sorted.map((r, i) => {
         const checked = state.selectedIds.has(r.household_id);
         const tagsForRow = (state.tagsByHh.get(r.household_id) || [])
           .map(t => `<span class="row-tag-chip">${escape(t.name)}</span>`).join("");
+        const p1 = parentFirstName(r, 0);
+        const p2 = parentFirstName(r, 1);
         return `
         <tr data-id="${r.household_id}" data-idx="${i}" class="${checked ? "selected" : ""}">
           <td class="check-col"><input type="checkbox" class="row-cb" ${checked ? "checked" : ""}></td>
-          <td class="owner">${tableOwnerCell(r)}</td>
-          <td class="addr">${escape(r.situs_address || "—")}</td>
           <td><span class="tier-badge ${r.tier}" title="${escape(TIER_LABEL[r.tier] || "")}">${escape(TIER_BADGE[r.tier] || r.tier)}</span></td>
+          <td class="owner">${tableOwnerCell(r)}</td>
+          <td>${escape(p1)}</td>
+          <td>${escape(p2)}</td>
+          <td class="addr">${escape(r.situs_address || "—")}</td>
           <td class="num">${r.market_value != null ? "$" + Math.round(r.market_value).toLocaleString() : "—"}</td>
           <td class="num">${r.years_owned ?? "—"}</td>
           <td class="num">${r.adult_count ?? "—"}</td>
@@ -735,7 +728,17 @@
         <span class="name">${escape(t.name)}</span>
         <span class="tag-count">${(t.household_ids || []).length}</span>
         <button class="apply" title="Filter to this tag">filter</button>
+        <button class="export" title="Export this tag…">export ▾</button>
         <button class="del" title="Delete tag">×</button>
+        <div class="tag-export-menu" hidden>
+          <button class="btn ghost block" data-tag-export="csv">Plain CSV</button>
+          <button class="btn ghost block" data-tag-export="xlsx">Excel (.xlsx)</button>
+          <button class="btn ghost block" data-tag-export="mymaps">Google My Maps CSV</button>
+          <button class="btn ghost block" data-tag-export="avery5160">Avery 5160 (30/sheet)</button>
+          <button class="btn ghost block" data-tag-export="avery5161">Avery 5161 (20/sheet)</button>
+          <button class="btn ghost block" data-tag-export="avery5163">Avery 5163 (10/sheet)</button>
+          <button class="btn ghost block" data-tag-export="avery5164">Avery 5164 (6/sheet doorhang)</button>
+        </div>
       </div>`).join("") : `<div class="muted small">No tags yet. Multiselect rows in List view, then "Tag selection".</div>`;
     $$("#tagList .apply").forEach(btn => {
       btn.addEventListener("click", (e) => {
@@ -745,6 +748,29 @@
         drawSavedTags();
         render();
         toast(state.activeTagFilter ? "Filtered to tag" : "Tag filter cleared");
+      });
+    });
+    $$("#tagList .export").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const row = btn.closest(".saved-row");
+        const menu = row.querySelector(".tag-export-menu");
+        // Close any other open per-tag export menus.
+        $$("#tagList .tag-export-menu").forEach(m => { if (m !== menu) m.hidden = true; });
+        menu.hidden = !menu.hidden;
+      });
+    });
+    $$("#tagList [data-tag-export]").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const row = btn.closest(".saved-row");
+        const id = row.dataset.id;
+        const kind = btn.dataset.tagExport;
+        const tag = state.tags.find(t => t.id === id);
+        if (!tag) return;
+        const set = householdsForTag(id);
+        runExportFor(kind, set, `tag-${tag.name}`);
+        row.querySelector(".tag-export-menu").hidden = true;
       });
     });
     $$("#tagList .del").forEach(btn => {
@@ -1261,20 +1287,6 @@
       }
     });
 
-    // Recipes
-    $("#saveRecipeBtn").addEventListener("click", async () => {
-      const name = $("#recipeName").value.trim();
-      if (!name) { toast("Name the recipe"); return; }
-      const { data, error } = await supabase.from("saved_filter_recipes")
-        .insert({ user_id: state.user.id, name, filter_state: snapshotFilterState() })
-        .select().single();
-      if (error) { toast(error.message); return; }
-      $("#recipeName").value = "";
-      state.savedRecipes.push(data);
-      drawSavedRecipes();
-      toast("Recipe saved");
-    });
-
     // Export menu
     $("#exportMenuBtn").addEventListener("click", () => {
       const m = $("#exportMenu");
@@ -1398,16 +1410,33 @@
   }
 
   function runExport(kind) {
-    const set = state.visibleSet;
-    if (!set.length) { toast("Nothing visible to export"); return; }
+    runExportFor(kind, state.visibleSet, "hudson-hs-parents");
+  }
+
+  // Export-by-tag uses this with the tag's households and a name-prefixed file.
+  function runExportFor(kind, set, prefix) {
+    if (!set || !set.length) { toast("Nothing to export"); return; }
     const today = new Date().toISOString().slice(0, 10);
-    if (kind === "csv") return downloadCsv(`hudson-hs-parents-${today}.csv`, plainCsv(set));
-    if (kind === "xlsx") return downloadXlsx(`hudson-hs-parents-${today}.xlsx`, set);
-    if (kind === "mymaps") return downloadCsv(`hudson-hs-parents-mymaps-${today}.csv`, googleMyMapsCsv(set));
-    if (kind === "avery5160") return downloadCsv(`avery-5160-${today}.csv`, averyCsv(set, "5160"));
-    if (kind === "avery5161") return downloadCsv(`avery-5161-${today}.csv`, averyCsv(set, "5161"));
-    if (kind === "avery5163") return downloadCsv(`avery-5163-${today}.csv`, averyCsv(set, "5163"));
-    if (kind === "avery5164") return downloadCsv(`avery-5164-${today}.csv`, averyCsv(set, "5164"));
+    const stem = (prefix || "export").replace(/[^a-z0-9-]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "export";
+    if (kind === "csv") return downloadCsv(`${stem}-${today}.csv`, plainCsv(set));
+    if (kind === "xlsx") return downloadXlsx(`${stem}-${today}.xlsx`, set);
+    if (kind === "mymaps") return downloadCsv(`${stem}-mymaps-${today}.csv`, googleMyMapsCsv(set));
+    if (kind === "avery5160") return downloadCsv(`${stem}-avery-5160-${today}.csv`, averyCsv(set, "5160"));
+    if (kind === "avery5161") return downloadCsv(`${stem}-avery-5161-${today}.csv`, averyCsv(set, "5161"));
+    if (kind === "avery5163") return downloadCsv(`${stem}-avery-5163-${today}.csv`, averyCsv(set, "5163"));
+    if (kind === "avery5164") return downloadCsv(`${stem}-avery-5164-${today}.csv`, averyCsv(set, "5164"));
+  }
+
+  // Resolve a tag's stored household_ids to live row objects (preserves the
+  // tier filter being applied — exporting a tag of households that no longer
+  // exist or have been TX-classed would 404 silently).
+  function householdsForTag(tagId) {
+    const tag = state.tags.find(t => t.id === tagId);
+    if (!tag) return [];
+    const wanted = new Set(tag.household_ids || []);
+    if (!wanted.size) return [];
+    const byId = new Map(state.targets.map(r => [r.household_id, r]));
+    return Array.from(wanted).map(id => byId.get(id)).filter(Boolean);
   }
 
   function downloadXlsx(filename, set) {
