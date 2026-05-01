@@ -504,13 +504,14 @@
     let av, bv;
     if (col === "tier") {
       // Sort the "Lead" column by user-priority rank (T1 > T2 > T3), not
-      // alphabetically. Tiebreak on evidence_score (highest first) so the
-      // default "strongest lead at the top" works after a single click —
-      // only as the LAST resort, after any user-added sort levels.
+      // alphabetically. The implicit evidence_score tiebreak lives in
+      // compareSorted so it applies only after every user-set sort level
+      // has been exhausted — otherwise it would short-circuit shift-click
+      // subsorts (a non-zero evidence_score gap inside the tier branch
+      // would prevent compareSorted from ever consulting the next level).
       av = TIER_RANK[a.tier] ?? 99;
       bv = TIER_RANK[b.tier] ?? 99;
-      if (av !== bv) return (av - bv) * sgn;
-      return ((b.evidence_score ?? -Infinity) - (a.evidence_score ?? -Infinity)) * sgn;
+      return (av - bv) * sgn;
     }
     if (col === "parent_1" || col === "parent_2") {
       const idx = col === "parent_1" ? 0 : 1;
@@ -545,7 +546,10 @@
       const c = cmpOne(a, b, col, dir);
       if (c !== 0) return c;
     }
-    return 0;
+    // Final implicit tiebreak: evidence_score desc. Keeps the
+    // single-click-on-Lead default ("strongest lead first within each tier")
+    // intact while never short-circuiting an explicit shift-click subsort.
+    return (b.evidence_score ?? -Infinity) - (a.evidence_score ?? -Infinity);
   }
   // Sensible default direction for a freshly-clicked column. Names ascend
   // (A→Z); numbers and lead-tier descend so the strongest values land first.
