@@ -988,16 +988,44 @@
   }
 
   // ── Exports ─────────────────────────────────────────────────────────
+  const PLAIN_COLS = [
+    ["tier","Tier"],["evidence_score","Score"],["display_name","Owner"],
+    ["situs_address","Address"],["situs_city","City"],["situs_zip","Zip"],
+    ["years_owned","Yrs owned"],["market_value","Value"],["sqft","Sqft"],
+    ["year_built","Built"],["mailing_same_as_situs","Owner-occupied"],
+    ["count_17_18_voters","17-18 voters"],["count_19_20_voters","19-20 voters"],
+    ["adult_count","Adults"],["datazapp_hit","Datazapp"],
+    ["why_sentence","Why"],["lat","Lat"],["lng","Lng"],
+  ];
+
   function runExport(kind) {
     const set = state.visibleSet;
     if (!set.length) { toast("Nothing visible to export"); return; }
     const today = new Date().toISOString().slice(0, 10);
     if (kind === "csv") return downloadCsv(`hudson-hs-parents-${today}.csv`, plainCsv(set));
+    if (kind === "xlsx") return downloadXlsx(`hudson-hs-parents-${today}.xlsx`, set);
     if (kind === "mymaps") return downloadCsv(`hudson-hs-parents-mymaps-${today}.csv`, googleMyMapsCsv(set));
     if (kind === "avery5160") return downloadCsv(`avery-5160-${today}.csv`, averyCsv(set, "5160"));
     if (kind === "avery5161") return downloadCsv(`avery-5161-${today}.csv`, averyCsv(set, "5161"));
     if (kind === "avery5163") return downloadCsv(`avery-5163-${today}.csv`, averyCsv(set, "5163"));
     if (kind === "avery5164") return downloadCsv(`avery-5164-${today}.csv`, averyCsv(set, "5164"));
+  }
+
+  function downloadXlsx(filename, set) {
+    if (!window.XLSX) { toast("Excel library not loaded — try again in a moment"); return; }
+    const aoa = [PLAIN_COLS.map(c => c[1])];
+    set.forEach(r => aoa.push(PLAIN_COLS.map(c => {
+      const v = r[c[0]];
+      if (v == null) return "";
+      if (Array.isArray(v)) return v.join("; ");
+      if (typeof v === "boolean") return v ? "yes" : "no";
+      return v;
+    })));
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Households");
+    XLSX.writeFile(wb, filename);
+    toast(`${filename} downloaded`);
   }
 
   function csvEscape(v) {
@@ -1015,17 +1043,8 @@
   }
 
   function plainCsv(set) {
-    const cols = [
-      ["tier","Tier"],["evidence_score","Score"],["display_name","Owner"],
-      ["situs_address","Address"],["situs_city","City"],["situs_zip","Zip"],
-      ["years_owned","Yrs owned"],["market_value","Value"],["sqft","Sqft"],
-      ["year_built","Built"],["mailing_same_as_situs","Owner-occupied"],
-      ["count_17_18_voters","17-18 voters"],["count_19_20_voters","19-20 voters"],
-      ["adult_count","Adults"],["datazapp_hit","Datazapp"],
-      ["why_sentence","Why"],["lat","Lat"],["lng","Lng"],
-    ];
-    const head = cols.map(c => c[1]).join(",");
-    const body = set.map(r => cols.map(c => csvEscape(r[c[0]])).join(",")).join("\n");
+    const head = PLAIN_COLS.map(c => c[1]).join(",");
+    const body = set.map(r => PLAIN_COLS.map(c => csvEscape(r[c[0]])).join(",")).join("\n");
     return head + "\n" + body;
   }
 
