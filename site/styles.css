@@ -527,8 +527,19 @@ label[title] { cursor: help; }
 }
 .hh-table thead th.sortable { cursor: pointer; }
 .hh-table thead th.sortable:hover { color: var(--accent-ink); }
+.hh-table thead th.sortable[title]::before { content: ""; }
 .hh-table thead th.sorted-asc::after  { content: " ▲"; color: var(--accent); }
 .hh-table thead th.sorted-desc::after { content: " ▼"; color: var(--accent); }
+/* Multi-level sort: show the level number as a small superscript so the
+   user can see which header is primary vs secondary at a glance. */
+.hh-table thead th[data-sort-level]::after {
+  content: " ▲" attr(data-sort-level);
+  font-size: 10px;
+}
+.hh-table thead th.sorted-desc[data-sort-level]::after {
+  content: " ▼" attr(data-sort-level);
+  font-size: 10px;
+}
 .hh-table thead th.num, .hh-table tbody td.num { text-align: right; }
 .hh-table thead th.check-col, .hh-table tbody td.check-col {
   width: 28px; padding-left: 14px; padding-right: 4px;

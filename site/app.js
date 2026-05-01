@@ -70,9 +70,13 @@
     visibleSet: [],
     firstLoad: true,
     viewMode: "map",          // "map" | "list"
-    // Default: strongest lead at the top. Tier rank ascending (T1 first),
-    // tiebreak on evidence_score descending — handled in compareRows.
-    sort: { col: "tier", dir: "asc" },
+    // Multi-level sort. First entry is the primary sort, then ties are broken
+    // by each subsequent entry. Click a header to set the primary sort
+    // (replacing the list); shift-click to append a secondary/tertiary sort
+    // or toggle the direction of an existing level. Default: strongest lead
+    // at the top. Tier rank ascending (T1 first), with evidence_score as an
+    // implicit final tiebreaker inside cmpOne when col === "tier".
+    sort: [{ col: "tier", dir: "asc" }],
     // Dev-only one-time pass to classify owner-voter surname mismatches.
     // Gated on localStorage.dev_review === "1"; not visible to end users.
     review: {
@@ -493,13 +497,16 @@
   }
 
   // ── List view ───────────────────────────────────────────────────────
-  function compareRows(a, b, col, dir) {
+  // Single-column comparator. Multi-level sort lives in compareSorted below,
+  // which calls this for each level until one returns non-zero.
+  function cmpOne(a, b, col, dir) {
     const sgn = dir === "desc" ? -1 : 1;
     let av, bv;
     if (col === "tier") {
       // Sort the "Lead" column by user-priority rank (T1 > T2 > T3), not
       // alphabetically. Tiebreak on evidence_score (highest first) so the
-      // default "strongest lead at the top" works after a single click.
+      // default "strongest lead at the top" works after a single click —
+      // only as the LAST resort, after any user-added sort levels.
       av = TIER_RANK[a.tier] ?? 99;
       bv = TIER_RANK[b.tier] ?? 99;
       if (av !== bv) return (av - bv) * sgn;
@@ -532,6 +539,19 @@
     av = av ?? -Infinity;
     bv = bv ?? -Infinity;
     return (av - bv) * sgn;
+  }
+  function compareSorted(a, b) {
+    for (const { col, dir } of state.sort) {
+      const c = cmpOne(a, b, col, dir);
+      if (c !== 0) return c;
+    }
+    return 0;
+  }
+  // Sensible default direction for a freshly-clicked column. Names ascend
+  // (A→Z); numbers and lead-tier descend so the strongest values land first.
+  function defaultDir(col) {
+    return (col === "display_name" || col === "situs_address" || col === "tier"
+            || col === "parent_1" || col === "parent_2") ? "asc" : "desc";
   }
 
   // Public-facing names. Internal tier codes (T1, T2, T3, TX) stay in the DB;
@@ -675,7 +695,7 @@
   }
 
   function drawList() {
-    const sorted = state.visibleSet.slice().sort((a, b) => compareRows(a, b, state.sort.col, state.sort.dir));
+    const sorted = state.visibleSet.slice().sort(compareSorted);
     state.listOrder = sorted;     // ordered by current sort, used for shift-click range
     const body = $("#hhTableBody");
     if (!sorted.length) {
@@ -705,7 +725,12 @@
     }
     $$("#hhTable thead th[data-sort]").forEach(th => {
       th.classList.remove("sorted-asc","sorted-desc");
-      if (th.dataset.sort === state.sort.col) th.classList.add(state.sort.dir === "asc" ? "sorted-asc" : "sorted-desc");
+      th.removeAttribute("data-sort-level");
+      const idx = state.sort.findIndex(l => l.col === th.dataset.sort);
+      if (idx >= 0) {
+        th.classList.add(state.sort[idx].dir === "asc" ? "sorted-asc" : "sorted-desc");
+        if (state.sort.length > 1) th.setAttribute("data-sort-level", String(idx + 1));
+      }
     });
     const sortLabelMap = {
       senior_score: "senior signal",
@@ -715,8 +740,10 @@
       parent_2: "parent 2",
       situs_address: "address",
     };
-    const sortLabel = sortLabelMap[state.sort.col] || state.sort.col.replace(/_/g, " ");
-    $("#listToolbar").textContent = `${sorted.length.toLocaleString()} households · sorted by ${sortLabel} (${state.sort.dir})`;
+    const sortDescr = state.sort
+      .map(l => `${sortLabelMap[l.col] || l.col.replace(/_/g, " ")} (${l.dir})`)
+      .join(", then ");
+    $("#listToolbar").textContent = `${sorted.length.toLocaleString()} households · sorted by ${sortDescr}`;
     $("#visibleCount").textContent = `${sorted.length.toLocaleString()} households visible`;
     refreshSelectionUI();
   }
@@ -1478,12 +1505,27 @@
     // View toggle (Map | List)
     $$(".view-toggle .vt").forEach(b => b.addEventListener("click", () => setViewMode(b.dataset.view)));
 
-    // Table sort
+    // Table sort. Plain click sets the primary sort (replacing the list);
+    // shift-click appends a secondary/tertiary level or toggles the direction
+    // of an existing level. Multiple levels apply hierarchically: ties at
+    // level N are broken by level N+1.
     $$("#hhTable thead th.sortable").forEach(th => {
-      th.addEventListener("click", () => {
+      th.addEventListener("click", (e) => {
         const col = th.dataset.sort;
-        if (state.sort.col === col) state.sort.dir = state.sort.dir === "asc" ? "desc" : "asc";
-        else { state.sort.col = col; state.sort.dir = (col === "display_name" || col === "situs_address" || col === "tier") ? "asc" : "desc"; }
+        const existing = state.sort.findIndex(l => l.col === col);
+        if (e.shiftKey) {
+          if (existing >= 0) {
+            state.sort[existing].dir = state.sort[existing].dir === "asc" ? "desc" : "asc";
+          } else {
+            state.sort.push({ col, dir: defaultDir(col) });
+          }
+        } else {
+          if (state.sort.length === 1 && state.sort[0].col === col) {
+            state.sort[0].dir = state.sort[0].dir === "asc" ? "desc" : "asc";
+          } else {
+            state.sort = [{ col, dir: defaultDir(col) }];
+          }
+        }
         drawList();
       });
     });
