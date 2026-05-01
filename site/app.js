@@ -767,7 +767,7 @@
         <div class="tag-export-menu" hidden>
           <button class="btn ghost block" data-tag-export="csv">Plain CSV</button>
           <button class="btn ghost block" data-tag-export="xlsx">Excel (.xlsx)</button>
-          <button class="btn ghost block" data-tag-export="mymaps">Google My Maps CSV</button>
+          <button class="btn ghost block" data-tag-export="mymaps">Google Maps (mymaps.google.com) (CSV)</button>
           <button class="btn ghost block" data-tag-export="avery5160">Avery 5160 (30/sheet)</button>
           <button class="btn ghost block" data-tag-export="avery5161">Avery 5161 (20/sheet)</button>
           <button class="btn ghost block" data-tag-export="avery5163">Avery 5163 (10/sheet)</button>
