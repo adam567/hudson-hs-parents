@@ -455,9 +455,12 @@ label[title] { cursor: help; }
 
 /* Responsive --------------------------------------------------------- */
 @media (max-width: 900px) {
-  /* Map-first: sidebar becomes off-canvas overlay over a full-bleed map. */
+  /* Map-first: sidebar becomes off-canvas overlay over a full-bleed map.
+     display:flex (not block) so .map-area can flex:1 against a definite
+     height — block-flow children don't inherit flex-derived parent heights. */
   .app-shell {
-    display: block;
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
   }
 
@@ -496,7 +499,8 @@ label[title] { cursor: help; }
   .sidebar-backdrop.show { opacity: 1; pointer-events: auto; }
 
   .map-area {
-    height: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
     width: 100%;
   }
   .map-header {
