@@ -34,8 +34,12 @@ FEATURE_SERVER = (os.environ.get("FEATURE_SERVER") or
 SALES_ZIP_URL = (os.environ.get("SALES_ZIP_URL") or
     "https://fiscaloffice.summitoh.net/index.php/documents-a-forms/finish/10-cama/237-sc706sales"
 )
-TARGET_ZIPS = [z.strip() for z in os.environ.get("TARGET_ZIPS", "44236").split(",") if z.strip()]
-TARGET_CITY = os.environ.get("TARGET_CITY", "HUDSON").upper()
+TARGET_ZIPS = [z.strip() for z in os.environ.get("TARGET_ZIPS", "44236,44264").split(",") if z.strip()]
+# Default broadens to the cities served by Hudson City School District. Set
+# TARGET_CITY explicitly to override (e.g. "HUDSON" only) for narrower runs.
+TARGET_CITIES = [c.strip().upper() for c in os.environ.get(
+    "TARGET_CITIES", os.environ.get("TARGET_CITY", "HUDSON,PENINSULA")).split(",") if c.strip()]
+TARGET_CITY = TARGET_CITIES[0]  # back-compat for legacy log line
 
 F = {
     "zip":         os.environ.get("ZIP_FIELD", "pstlzip5"),
@@ -85,7 +89,8 @@ def fetch_arcgis(zip_code: str) -> Iterable[dict]:
     out_fields = [v for v in [F["parcel_id"], F["addr"], F["city"], F["zip"], F["mail"],
                               F["owner"], F["owner2"], F["sqft"], F["value"],
                               F["year_built"], F["class"]] if v]
-    where = f"{F['zip']}='{zip_code}' AND {F['city']} LIKE '{TARGET_CITY}%'"
+    city_clauses = " OR ".join(f"{F['city']} LIKE '{c}%'" for c in TARGET_CITIES)
+    where = f"{F['zip']}='{zip_code}' AND ({city_clauses})"
     offset = 0
     page = 1000
     while True:
@@ -212,7 +217,7 @@ def main() -> None:
     rows: list[dict] = []
     seen: set[str] = set()
     for zip_code in TARGET_ZIPS:
-        print(f"[arcgis] {FEATURE_SERVER} where zip={zip_code} city LIKE {TARGET_CITY}%")
+        print(f"[arcgis] {FEATURE_SERVER} where zip={zip_code} city in {TARGET_CITIES}")
         gross = 0
         for attrs in fetch_arcgis(zip_code):
             gross += 1

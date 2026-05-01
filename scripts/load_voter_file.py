@@ -1,11 +1,19 @@
 #!/usr/bin/env python3
-"""Load Ohio voter file CSV into voter_records.
+"""Load Ohio voter file CSV(s) into voter_records.
 
-Source: Ohio Secretary of State daily voter snapshots. The CSV used here
-filters to Hudson 44236.
+Source: Ohio Secretary of State daily voter snapshots. Pass one or more
+exports; each is filtered to the configured (CITY, ZIP) pairs and merged.
+
+Hudson High School District is NOT identical to ZIP 44236 — pieces of
+Peninsula 44264 (and historically Boston Heights) are in HCSD too. Pass
+those exports as additional positional args and override TARGET_CITIES /
+TARGET_ZIPS to widen the filter.
 
 Usage:
-    python scripts/load_voter_file.py "C:/realestate/VoterRolls/voterfile (1).csv"
+    python scripts/load_voter_file.py \\
+        "C:/realestate/VoterRolls/voterfile (1).csv" \\
+        "C:/realestate/VoterRolls/peninsula - voter file.csv" \\
+        "C:/realestate/VoterRolls/boston heights - voter file.csv"
 
 Reads SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY from env.
 """
@@ -21,8 +29,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from address_key import address_key
 from supabase_client import require_env, upsert, truncate
 
-TARGET_CITY = os.environ.get("TARGET_CITY", "HUDSON").upper()
-TARGET_ZIPS = {z.strip() for z in os.environ.get("TARGET_ZIPS", "44236").split(",") if z.strip()}
+# Comma-separated lists; default covers Hudson + Peninsula. Boston Heights
+# voters carry CITY=HUDSON ZIP=44236 in the SOS export (USPS post office
+# is Hudson) so they're already accepted by the Hudson 44236 filter.
+TARGET_CITIES = {c.strip().upper() for c in os.environ.get(
+    "TARGET_CITIES", "HUDSON,PENINSULA").split(",") if c.strip()}
+TARGET_ZIPS = {z.strip() for z in os.environ.get(
+    "TARGET_ZIPS", "44236,44264").split(",") if z.strip()}
 
 
 def parse_reg_date(s: str) -> str | None:
@@ -39,7 +52,7 @@ def parse_reg_date(s: str) -> str | None:
 def to_row(r: dict) -> dict | None:
     city = (r.get("CITY") or "").strip().upper()
     zip5 = (r.get("ZIP") or "").strip()
-    if not city.startswith(TARGET_CITY):
+    if not any(city.startswith(c) for c in TARGET_CITIES):
         return None
     if zip5 not in TARGET_ZIPS:
         return None
@@ -78,20 +91,40 @@ def to_row(r: dict) -> dict | None:
     }
 
 
-def main(path: str) -> None:
+def main(paths: list[str]) -> None:
     require_env()
     rows: list[dict] = []
-    with open(path, "r", encoding="utf-8-sig", newline="") as f:
-        reader = csv.DictReader(f)
-        for raw in reader:
-            r = to_row(raw)
-            if r:
+    seen_sos_ids: set[str] = set()
+    per_file_counts: list[tuple[str, int, int]] = []
+    for path in paths:
+        kept = 0
+        seen = 0
+        with open(path, "r", encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f)
+            for raw in reader:
+                seen += 1
+                r = to_row(raw)
+                if not r:
+                    continue
+                sos = r.get("sos_id")
+                # Voter could appear in multiple files (rare — each county/precinct
+                # roster is normally exclusive — but Hudson + Peninsula could
+                # overlap on township-line precincts). Dedupe by SOS id.
+                if sos and sos in seen_sos_ids:
+                    continue
+                if sos:
+                    seen_sos_ids.add(sos)
                 rows.append(r)
+                kept += 1
+        per_file_counts.append((path, seen, kept))
 
     if not rows:
         sys.exit("no voter rows passed filters; refusing to write empty dataset")
 
-    print(f"[voter] {len(rows)} rows after Hudson 44236 filter")
+    for path, seen, kept in per_file_counts:
+        print(f"[voter] {os.path.basename(path)}: {kept}/{seen} rows kept")
+    print(f"[voter] {len(rows)} unique rows after dedupe; "
+          f"cities={sorted(TARGET_CITIES)} zips={sorted(TARGET_ZIPS)}")
 
     # Full-refresh strategy: wipe then upsert. Voter file is the spine; we
     # want a clean snapshot every load.
@@ -105,5 +138,5 @@ def main(path: str) -> None:
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        sys.exit("usage: load_voter_file.py <path/to/voterfile.csv>")
-    main(sys.argv[1])
+        sys.exit("usage: load_voter_file.py <path/to/voterfile.csv> [more.csv ...]")
+    main(sys.argv[1:])

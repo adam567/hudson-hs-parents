@@ -50,14 +50,18 @@ def institutional(owner: str | None) -> bool:
                                  "ESQ", "INC", "CORP", "FOUNDATION", "BANK"))
 
 
+LOCAL_ZIPS = {z.strip() for z in os.environ.get(
+    "TARGET_ZIPS", "44236,44264").split(",") if z.strip()}
+
+
 def out_of_hudson(parcel: dict) -> bool:
     same = parcel.get("mailing_same_as_situs")
     mzip = (parcel.get("mailing_zip") or "").strip()
     if same:
         return False
-    if mzip == "44236":
+    if mzip in LOCAL_ZIPS:
         return False
-    return bool(mzip)  # mailing zip exists and isn't Hudson
+    return bool(mzip)  # mailing zip exists and isn't a school-district ZIP
 
 
 def age_at(birth_year: int | None, anchor: date) -> int | None:
