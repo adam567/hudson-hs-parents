@@ -15,7 +15,7 @@ def test_voter_to_full_collision():
     assert a == b == "53 W CASE DR"
 
 
-def test_parcel_to_datazapp_collision():
+def test_parcel_to_voter_collision():
     a = address_key(full_address="252 S MAIN ST")
     b = address_key(full_address="252 S Main Street")
     assert a == b == "252 S MAIN ST"

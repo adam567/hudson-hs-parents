@@ -15,13 +15,8 @@
   --t1-ring: #d9a420;          /* gold ring */
   --t2: #c87423;              /* burnt orange */
   --t2-ring: #e3a95a;
-  --t2b: #d6a36a;             /* desaturated burnt orange — voter-only inference */
-  --t2b-ring: #ead0a0;
   --t3: #c69b3b;              /* amber */
   --t3-ring: #8a6822;
-  --t4: #4a6a8c;              /* steel blue */
-  --t4-ring: #b6c8db;
-  --t5: #8b8e93;              /* muted gray-blue */
 
   --good: #2f7d4a;
   --warn: #a36b1f;
@@ -174,7 +169,6 @@ label[title] { cursor: help; }
 }
 .pin-preview.T1 { width: 14px; height: 14px; background: var(--t1); box-shadow: 0 0 0 2px var(--t1-ring), 0 0 0 3px rgba(0,0,0,0.15); }
 .pin-preview.T2 { width: 12px; height: 12px; background: var(--t2); box-shadow: 0 0 0 2px var(--t2-ring), 0 0 0 3px rgba(0,0,0,0.15); }
-.pin-preview.T2b { width: 10px; height: 10px; background: var(--t2b); box-shadow: 0 0 0 1.5px var(--t2b-ring), 0 0 0 2px rgba(0,0,0,0.12); opacity: 0.85; }
 /* T3 = adjacent leads (recent grads). Hollow rotated square so the eye reads
    "different category" before it reads color, including for colorblind users. */
 .pin-preview.T3 {
@@ -185,8 +179,6 @@ label[title] { cursor: help; }
   transform: rotate(45deg);
   box-shadow: none;
 }
-.pin-preview.T4 { width: 11px; height: 11px; background: var(--t4); box-shadow: 0 0 0 2px var(--t4-ring); }
-.pin-preview.T5 { width: 9px;  height: 9px;  background: var(--t5); opacity: 0.7; }
 
 /* Tier-toggle text column (label name + basis line) */
 .tier-toggle { align-items: flex-start; }
@@ -281,13 +273,6 @@ label[title] { cursor: help; }
   background: var(--t2);
   box-shadow: 0 0 0 2px var(--t2-ring), 0 1px 3px rgba(0,0,0,0.3);
 }
-.marker-T2b {
-  /* Demoted below T4 in the priority reorder — was 11px, now 10px. */
-  width: 10px !important; height: 10px !important;
-  background: var(--t2b);
-  box-shadow: 0 0 0 1.5px var(--t2b-ring), 0 1px 2px rgba(0,0,0,0.22);
-  opacity: 0.85;
-}
 /* T3 marker: hollow rotated square (diamond). Distinct shape signals the
    "adjacent — recent grad" category at a glance, before color is decoded. */
 .marker-T3 {
@@ -297,19 +282,6 @@ label[title] { cursor: help; }
   border-radius: 2px !important;
   transform: rotate(45deg);
   box-shadow: 0 1px 2px rgba(0,0,0,0.18);
-}
-.marker-T4 {
-  /* Promoted above T2b — was 10px, now 11px to match its rank-3 priority. */
-  width: 11px !important; height: 11px !important;
-  background: var(--t4);
-  box-shadow: 0 0 0 1.5px var(--t4-ring), 0 1px 2px rgba(0,0,0,0.2);
-}
-.marker-T5 {
-  width: 9px !important; height: 9px !important;
-  background: var(--t5);
-  border: 1px solid #fff;
-  opacity: 0.55;
-  box-shadow: 0 1px 1px rgba(0,0,0,0.18);
 }
 .marker-knocked {
   filter: grayscale(1) opacity(0.4);
@@ -385,14 +357,8 @@ label[title] { cursor: help; }
 .banner.banner--t1::before  { background: var(--t1); }
 .banner.banner--t2  { background: rgba(200,116,35,0.08); }
 .banner.banner--t2::before  { background: var(--t2); }
-.banner.banner--t2b { background: rgba(214,163,106,0.10); }
-.banner.banner--t2b::before { background: var(--t2b); }
 .banner.banner--t3  { background: rgba(198,155,59,0.07); }
 .banner.banner--t3::before  { background: var(--t3-ring); }
-.banner.banner--t4  { background: rgba(74,106,140,0.07); }
-.banner.banner--t4::before  { background: var(--t4); }
-.banner.banner--t5  { background: rgba(139,142,147,0.08); }
-.banner.banner--t5::before  { background: var(--t5); }
 
 .evidence-list { margin: 0 0 12px; padding: 0; list-style: none; }
 .evidence-list li {
@@ -587,14 +553,11 @@ label[title] { cursor: help; }
 }
 .tier-badge.T1 { background: var(--t1); }
 .tier-badge.T2 { background: var(--t2); }
-.tier-badge.T2b { background: var(--t2b); color: #1d1d1f; }
 /* T3 = Adjacent — visually a hollow chip to mirror the diamond pin */
 .tier-badge.T3 {
   background: transparent; color: var(--t3-ring);
   border: 1px solid var(--t3-ring);
 }
-.tier-badge.T4 { background: var(--t4); }
-.tier-badge.T5 { background: var(--t5); }
 
 .row-tag-chip {
   display: inline-block; padding: 1px 7px; margin: 0 3px 2px 0;
@@ -627,6 +590,28 @@ label[title] { cursor: help; }
 /* Tag modal body ----------------------------------------------------- */
 .tag-modal-existing { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; max-height: 200px; overflow-y: auto; }
 .tag-modal-existing .chip { font-size: 13px; }
+
+/* Surname-mismatch review (dev-only) --------------------------------- */
+#reviewSection h3 .muted { font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; }
+.review-progress { font-variant-numeric: tabular-nums; }
+.review-banner {
+  background: rgba(122, 80, 22, 0.08); border: 1px solid #d3b988;
+  border-radius: 6px; padding: 8px 10px; margin: 6px 0 10px;
+  font-size: 13px; color: var(--accent-ink);
+}
+.review-pair {
+  display: grid; grid-template-columns: max-content 1fr; gap: 4px 10px;
+  margin: 8px 0 10px; font-size: 13px;
+}
+.review-pair .k { color: var(--muted); }
+.review-pair .v { font-weight: 600; }
+.review-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.review-actions .btn { padding: 6px 10px; font-size: 13px; }
+.review-classified {
+  display: inline-block; margin-left: 6px;
+  font-size: 11px; padding: 1px 7px; border-radius: 10px;
+  background: var(--accent-soft); color: var(--accent-ink);
+}
 
 /* Responsive --------------------------------------------------------- */
 @media (max-width: 900px) {

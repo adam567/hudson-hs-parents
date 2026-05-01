@@ -67,10 +67,7 @@
         <h3>Senior leads</h3>
         <p class="muted small mb">Ordered by priority. Larger, brighter dots = stronger leads.</p>
         <label class="tier-toggle"><input type="checkbox" data-tier="T1" checked> <span class="pin-preview T1"></span> <span class="tier-label-text"><span class="tier-name">Confirmed Senior</span><span class="tier-basis muted small">A senior-age student is registered to vote here.</span></span> <span class="count" data-count="T1">—</span></label>
-        <label class="tier-toggle"><input type="checkbox" data-tier="T2" checked> <span class="pin-preview T2"></span> <span class="tier-label-text"><span class="tier-name">Likely Senior — List Match</span><span class="tier-basis muted small">National parents list match plus two parent-age voters and 8+ years owned.</span></span> <span class="count" data-count="T2">—</span></label>
-        <label class="tier-toggle"><input type="checkbox" data-tier="T4"> <span class="pin-preview T4"></span> <span class="tier-label-text"><span class="tier-name">Possible Senior — List Match + Parent-Aged Voter</span><span class="tier-basis muted small">National parents list match plus at least one parent-age voter at this address.</span></span> <span class="count" data-count="T4">—</span></label>
-        <label class="tier-toggle"><input type="checkbox" data-tier="T2b"> <span class="pin-preview T2b"></span> <span class="tier-label-text"><span class="tier-name">Two Parent-Aged Adults — 8+ Years</span><span class="tier-basis muted small">No list match, but two parent-age voters with long tenure. Inferred.</span></span> <span class="count" data-count="T2b">—</span></label>
-        <label class="tier-toggle"><input type="checkbox" data-tier="T5"> <span class="pin-preview T5"></span> <span class="tier-label-text"><span class="tier-name">List Match</span><span class="tier-basis muted small">National parents list only — list isn't always clean. Lower-confidence.</span></span> <span class="count" data-count="T5">—</span></label>
+        <label class="tier-toggle"><input type="checkbox" data-tier="T2" checked> <span class="pin-preview T2"></span> <span class="tier-label-text"><span class="tier-name">Likely Senior — Parent Pattern</span><span class="tier-basis muted small">Two parent-age voters at the address with 8+ years owned and the owner lives here. Inferred.</span></span> <span class="count" data-count="T2">—</span></label>
       </section>
 
       <section class="filter-section adjacent-section">
@@ -133,6 +130,15 @@
         <input type="search" id="filterSearch" placeholder="address or owner name">
       </section>
 
+      <section class="filter-section" id="reviewSection" hidden>
+        <h3>Surname-mismatch review <span class="muted small">dev</span></h3>
+        <p class="muted small mb">One-time pass to classify the households where the parcel owner's surname does not match any voter at the address. Classifications save to local storage; click "Export SQL" when done.</p>
+        <div class="review-progress muted small mb" id="reviewProgress">—</div>
+        <button class="btn primary block" id="reviewStartBtn">Start / resume review</button>
+        <button class="btn ghost block" id="reviewExportBtn" style="margin-top:6px">Export SQL</button>
+        <button class="btn ghost block" id="reviewClearBtn" style="margin-top:6px">Clear local classifications</button>
+      </section>
+
       <section class="filter-section">
         <h3>Map layers</h3>
         <label class="tier-toggle"><input type="checkbox" id="layerHeatmap" checked> Density heatmap</label>
@@ -158,14 +164,12 @@
         <h3>Quick cohorts</h3>
         <p class="muted small mb">Click to apply. Click again to remove. Multiple stack.</p>
         <div class="chips" id="cohortChips">
-          <button class="chip" data-cohort="younger_siblings">Has a younger sibling at home</button>
           <button class="chip" data-cohort="long_tenure_15">15+ years owned</button>
           <button class="chip" data-cohort="long_tenure_25">25+ years owned</button>
           <button class="chip" data-cohort="top_value">Top 25% by home value</button>
           <button class="chip" data-cohort="two_adults">Two adults at address</button>
           <button class="chip" data-cohort="single_adult">One adult at address</button>
-          <button class="chip" data-cohort="dz_voter">List match + senior on voter records</button>
-          <button class="chip" data-cohort="dz_only">List match only — no other signal</button>
+          <button class="chip" data-cohort="surname_match">Owner surname matches a voter</button>
         </div>
       </section>
       <section class="filter-section adjacent-section">
@@ -236,7 +240,6 @@
               <th data-sort="years_owned" class="sortable num">Yrs</th>
               <th data-sort="adult_count" class="sortable num">Adults</th>
               <th data-sort="senior_score" class="sortable num">Senior</th>
-              <th data-sort="datazapp_hit" class="sortable">List match</th>
               <th class="tags-col">Tags</th>
             </tr>
           </thead>

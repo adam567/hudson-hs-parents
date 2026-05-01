@@ -46,7 +46,7 @@
     activeTagFilter: null,   // tag id, when filtering by a tag
     lastClickedIdx: -1,
     filters: {
-      tiers: { T1: true, T2: true, T2b: false, T3: false, T4: false, T5: false },
+      tiers: { T1: true, T2: true, T3: false },
       cohorts: new Set(),
       minValue: null, maxValue: null,
       minYears: null, maxYears: null,
@@ -73,6 +73,13 @@
     // Default: strongest lead at the top. Tier rank ascending (T1 first),
     // tiebreak on evidence_score descending — handled in compareRows.
     sort: { col: "tier", dir: "asc" },
+    // Dev-only one-time pass to classify owner-voter surname mismatches.
+    // Gated on localStorage.dev_review === "1"; not visible to end users.
+    review: {
+      enabled: false,
+      worklist: [],     // ordered household_ids of unreviewed mismatches
+      cursor: 0,
+    },
   };
 
   // ── Auth ────────────────────────────────────────────────────────────
@@ -127,7 +134,7 @@
     // Apply prefs to filter state
     if (state.prefs?.default_visible_tiers && Array.isArray(state.prefs.default_visible_tiers)) {
       const enabled = new Set(state.prefs.default_visible_tiers);
-      ["T1","T2","T2b","T3","T4","T5"].forEach(t => state.filters.tiers[t] = enabled.has(t));
+      ["T1","T2","T3"].forEach(t => state.filters.tiers[t] = enabled.has(t));
       $$("#sidebar [data-tier]").forEach(el => {
         el.checked = enabled.has(el.dataset.tier);
       });
@@ -196,7 +203,7 @@
   }
 
   function drawTierCounts() {
-    const counts = { T1: 0, T2: 0, T2b: 0, T3: 0, T4: 0, T5: 0 };
+    const counts = { T1: 0, T2: 0, T3: 0 };
     state.targets.forEach(r => { if (counts[r.tier] != null) counts[r.tier]++; });
     Object.entries(counts).forEach(([t, n]) => {
       const el = $(`[data-count="${t}"]`);
@@ -267,7 +274,6 @@
     const cohorts = state.filters.cohorts;
     if (!cohorts.size) return true;
     const checks = {
-      younger_siblings: () => r.tier === "T4",
       recent_grads: () => r.has_19_20_voter,
       long_tenure_15: () => (r.years_owned ?? 0) >= 15,
       long_tenure_25: () => (r.years_owned ?? 0) >= 25,
@@ -280,8 +286,9 @@
       },
       two_adults: () => (r.adult_count ?? 0) >= 2,
       single_adult: () => r.adult_count === 1,
-      dz_voter: () => r.datazapp_hit && (r.has_17_18_voter || r.has_19_20_voter),
-      dz_only: () => r.datazapp_hit && !r.has_17_18_voter && !r.has_19_20_voter,
+      surname_match: () => r.owner_voter_surname_match === true
+        || (r.owner_voter_surname_match === false
+            && (r.owner_voter_review === "owner_lives_here" || r.owner_voter_review === "trust_or_llc")),
     };
     for (const c of cohorts) {
       if (!checks[c] || !checks[c]()) return false;
@@ -422,12 +429,8 @@
       const heatData = state.visibleSet
         .filter(r => r.lat && r.lng && r.tier !== "T3")  // T3 = adjacent, never contributes to senior density
         .map(r => {
-          // Weights track TIER_RANK: T1 strongest, T5 weakest, T3 excluded above.
-          const w = r.tier === "T1"  ? 1.00
-                  : r.tier === "T2"  ? 0.75
-                  : r.tier === "T4"  ? 0.55
-                  : r.tier === "T2b" ? 0.35
-                  :                    0.15;  // T5
+          // T1 = ground truth; T2 = inferred. T3 is excluded above.
+          const w = r.tier === "T1" ? 1.00 : 0.65;
           return [r.lat, r.lng, w];
         });
       state.heatLayer = L.heatLayer(heatData, { radius: 24, blur: 18 }).addTo(state.map);
@@ -467,8 +470,8 @@
     const sgn = dir === "desc" ? -1 : 1;
     let av, bv;
     if (col === "tier") {
-      // Sort the "Lead" column by user-priority rank (T1 > T2 > T4 > T2b > T5 > T3),
-      // not alphabetically. Tiebreak on evidence_score (highest first) so the
+      // Sort the "Lead" column by user-priority rank (T1 > T2 > T3), not
+      // alphabetically. Tiebreak on evidence_score (highest first) so the
       // default "strongest lead at the top" works after a single click.
       av = TIER_RANK[a.tier] ?? 99;
       bv = TIER_RANK[b.tier] ?? 99;
@@ -489,9 +492,6 @@
     if (col === "senior_score") {
       av = (a.count_17_18_voters ?? 0) * 10 + (a.count_19_20_voters ?? 0);
       bv = (b.count_17_18_voters ?? 0) * 10 + (b.count_19_20_voters ?? 0);
-    } else if (col === "datazapp_hit") {
-      av = a.datazapp_hit ? 1 : 0;
-      bv = b.datazapp_hit ? 1 : 0;
     } else {
       av = a[col]; bv = b[col];
     }
@@ -507,34 +507,23 @@
     return (av - bv) * sgn;
   }
 
-  // Public-facing names. Internal tier codes (T1, T2, T2b, T3, T4, T5, TX) stay
-  // in the DB; this map is the single source of truth for what the user sees.
-  // Object key order reflects priority for readers; rendering order comes from
-  // TIER_RANK below.
+  // Public-facing names. Internal tier codes (T1, T2, T3, TX) stay in the DB;
+  // this map is the single source of truth for what the user sees.
   const TIER_LABEL = {
-    T1:  "Confirmed Senior",
-    T2:  "Likely Senior — List Match",
-    T4:  "Possible Senior — List Match + Parent-Aged Voter",
-    T2b: "Two Parent-Aged Adults — 8+ Years",
-    T5:  "List Match",
-    T3:  "Recent Grad",
+    T1: "Confirmed Senior",
+    T2: "Likely Senior — Parent Pattern",
+    T3: "Recent Grad",
   };
   // Numeric rank shown in the "Lead" badge column. T3 is off-thesis adjacent;
-  // its "Adj." label keeps it off the senior ladder rather than implying rank-6.
-  const TIER_BADGE = {
-    T1: "1", T2: "2", T4: "3", T2b: "4", T5: "5", T3: "Adj.",
-  };
+  // its "Adj." label keeps it off the senior ladder rather than implying rank-3.
+  const TIER_BADGE = { T1: "1", T2: "2", T3: "Adj." };
   // Sort/visual rank — drives table sort-by-Lead, sidebar order, marker size,
   // and heatmap weight. T3 stays last as an adjacent category.
-  const TIER_RANK = {
-    T1: 1, T2: 2, T4: 3, T2b: 4, T5: 5, T3: 6,
-  };
-  // Replace any echo of the vendor name in pre-rendered text (e.g. why_sentence
-  // generated by recompute_tiers, which still includes "Datazapp College-Bound
-  // match" verbatim). The user must never see this string.
-  const sanitizeText = s => (s == null ? "" : String(s))
-    .replace(/Datazapp College-Bound match/gi, "matched a national college-bound parents list")
-    .replace(/Datazapp/gi, "the national parents list");
+  const TIER_RANK = { T1: 1, T2: 2, T3: 3 };
+  // Identity passthrough — kept so callers below remain stable. Vendor-name
+  // sanitisation used to live here; the migration that retired the vendor
+  // also stripped its text from why_sentence at the source.
+  const sanitizeText = s => (s == null ? "" : String(s));
 
   // Owner names in the parcel data are "LASTNAME FIRSTNAME [MIDDLE]" all caps.
   // Tables stay last-first (faster to scan a sorted column); modals flip to
@@ -663,7 +652,7 @@
     state.listOrder = sorted;     // ordered by current sort, used for shift-click range
     const body = $("#hhTableBody");
     if (!sorted.length) {
-      body.innerHTML = `<tr><td colspan="12" class="muted small" style="padding:24px;text-align:center">No households match the current filters.</td></tr>`;
+      body.innerHTML = `<tr><td colspan="11" class="muted small" style="padding:24px;text-align:center">No households match the current filters.</td></tr>`;
     } else {
       body.innerHTML = sorted.map((r, i) => {
         const checked = state.selectedIds.has(r.household_id);
@@ -683,7 +672,6 @@
           <td class="num">${r.years_owned ?? "—"}</td>
           <td class="num">${r.adult_count ?? "—"}</td>
           <td class="num">${r.count_17_18_voters ? r.count_17_18_voters : (r.count_19_20_voters ? "·" + r.count_19_20_voters : "—")}</td>
-          <td class="num">${r.datazapp_hit ? "✓" : ""}</td>
           <td class="tags-col">${tagsForRow}</td>
         </tr>`;
       }).join("");
@@ -694,7 +682,6 @@
     });
     const sortLabelMap = {
       senior_score: "senior signal",
-      datazapp_hit: "list match",
       tier: "lead",
       display_name: "owner",
       parent_1: "parent 1",
@@ -895,20 +882,8 @@
       basisFn: r => `A 17- or 18-year-old is registered to vote at this address${r.count_17_18_voters > 1 ? ` (${r.count_17_18_voters} on file)` : ""}.`,
     },
     T2: {
-      verdict: "A high-school senior likely lives here.",
-      basisFn: r => `This household appears on a national list of parents of college-bound youth, and ${r.adult_42_63_count ?? 2} parent-age adults (42–63) have lived here for ${r.years_owned ?? "8+"} years.`,
-    },
-    T4: {
-      verdict: "A high-school senior may live here.",
-      basisFn: r => `This household appears on a national list of parents of college-bound youth, and ${r.adult_42_63_count || "at least one"} parent-age adult is registered to vote here. A second adult or long tenure isn't on file to corroborate.`,
-    },
-    T2b: {
-      verdict: "A high-school senior may live here — inferred.",
-      basisFn: r => `Two parent-age adults (42–63) own this home and have lived here ${r.years_owned ?? "8+"} years — the textbook profile of a senior's parents — but no kid voter or outside list confirms it.`,
-    },
-    T5: {
-      verdict: "A high-school senior may live here.",
-      basisFn: () => `This household appears on a national list of parents of college-bound youth. Nothing else in the voter file corroborates it.`,
+      verdict: "A high-school senior likely lives here — inferred.",
+      basisFn: r => `Two parent-age adults (42–63) own this home and have lived here ${r.years_owned ?? "8+"} years — the textbook profile of a senior's parents — but no kid voter at this address confirms it.`,
     },
     T3: {
       verdict: "A recent high-school grad is registered here.",
@@ -918,15 +893,12 @@
   };
 
   // Glyph in the banner — color comes from the per-tier .banner--tX class.
-  const TIER_GLYPH = { T1: "●", T2: "●", T4: "◐", T2b: "○", T5: "○", T3: "◇" };
+  const TIER_GLYPH = { T1: "●", T2: "●", T3: "◇" };
 
   // Per-tier "what we couldn't verify" caveat. Empty for T1 (verified).
   const TIER_CAVEAT = {
     T1: "",
-    T2: "We don't have a kid registered to vote here — the senior on the national list is our best non-voter signal at this address.",
-    T4: "Only one parent-age adult is registered to vote, or the household hasn't been here 8+ years — both signals would have made this a stronger lead.",
-    T2b: "No national-list match and no kid registered to vote here. This is a pattern-based inference — strong, but unverified.",
-    T5: "List match only. The national list isn't perfectly clean — some entries are stale or off-target — and we have no parent-age adult or long tenure here to corroborate. Treat as a lower-confidence lead.",
+    T2: "No kid is registered to vote at this address. This is a pattern-based inference — strong, but unverified.",
     T3: "Their kid is age 19–20 and may have already left home. This isn't a current senior — it's an adjacent lead.",
   };
 
@@ -946,18 +918,15 @@
     if (v19 > 0 && r.tier === "T3") {
       items.push(["yes", `A 19- or 20-year-old is registered to vote here${v19 > 1 ? ` (${v19} on file)` : ""}.`]);
     }
-    if (r.datazapp_hit) {
-      items.push(["yes", "This household appears on a national list of parents of college-bound youth."]);
-    }
     if (adults4263 >= 2) {
       items.push(["yes", `${adults4263} parent-age adults (42–63) are registered here.`]);
-    } else if (adults4263 === 1 && (r.tier === "T4" || r.tier === "T2b")) {
-      items.push(["yes", `One parent-age adult (42–63) is registered here.`]);
     }
     if (yrs != null && yrs >= 8) {
       items.push(["yes", `The owners have lived here ${yrs} years.`]);
     }
-    if (r.owner_voter_surname_match === true) {
+    if (r.owner_voter_surname_match === true
+        || (r.owner_voter_surname_match === false
+            && (r.owner_voter_review === "owner_lives_here" || r.owner_voter_review === "trust_or_llc"))) {
       items.push(["yes", "The owner's surname matches a voter at this address."]);
     }
     return items.slice(0, 3);
@@ -970,40 +939,25 @@
     const v19 = r.count_19_20_voters ?? 0;
     const adults4263 = r.adult_42_63_count ?? 0;
     const yrs = r.years_owned;
-    const dz = r.datazapp_hit;
 
     if (r.tier === "T1") {
       checks.push(["✓", `Voter file shows ${v17} resident${v17 === 1 ? "" : "s"} age 17–18`]);
-    }
-    if (r.tier === "T3") {
-      checks.push(["✓", `Voter file shows ${v19} resident${v19 === 1 ? "" : "s"} age 19–20`]);
-      if (v17 === 0) checks.push(["·", "No 17–18 voter at this address (would be T1)"]);
-    }
-    if (r.tier === "T2" || r.tier === "T4" || r.tier === "T5") {
-      checks.push([dz ? "✓" : "—", "Datazapp College-Bound match"]);
     }
     if (r.tier === "T2") {
       checks.push([adults4263 >= 2 ? "✓" : "—",
         `${adults4263} parent-age (42–63) adult${adults4263 === 1 ? "" : "s"} at address — need ≥ 2`]);
       checks.push([(yrs ?? 0) >= 8 ? "✓" : "—",
         `${yrs ?? "?"} years owned — need ≥ 8`]);
-      if (v17 === 0) checks.push(["·", "No 17–18 voter at this address (would be T1)"]);
-    }
-    if (r.tier === "T2b") {
-      checks.push([adults4263 >= 2 ? "✓" : "—",
-        `${adults4263} parent-age (42–63) adult${adults4263 === 1 ? "" : "s"} at address — need ≥ 2`]);
-      checks.push([(yrs ?? 0) >= 8 ? "✓" : "—",
-        `${yrs ?? "?"} years owned — need ≥ 8`]);
       checks.push([r.mailing_same_as_situs ? "✓" : "—", "Owner-occupied"]);
-      checks.push(["·", "No 17–18 or 19–20 voter and no Datazapp hit (voter-pattern inference)"]);
+      checks.push([r.institutional_owner ? "—" : "✓", "Non-institutional owner"]);
+      if (v17 === 0) checks.push(["·", "No 17–18 voter at this address (would be T1)"]);
+      if (r.owner_voter_review === "absentee_or_rental") {
+        checks.push(["—", "Reviewed: not owner-occupied (would otherwise be T2)"]);
+      }
     }
-    if (r.tier === "T4") {
-      checks.push([adults4263 >= 1 ? "✓" : "—",
-        `${adults4263} parent-age (42–63) adult${adults4263 === 1 ? "" : "s"} at address — need ≥ 1`]);
-      checks.push(["·", "Did not meet T2 (needs 2 parent-age adults + 8 yrs owned)"]);
-    }
-    if (r.tier === "T5") {
-      checks.push(["·", "No parent-age adult on voter file (would be T4)"]);
+    if (r.tier === "T3") {
+      checks.push(["✓", `Voter file shows ${v19} resident${v19 === 1 ? "" : "s"} age 19–20`]);
+      if (v17 === 0) checks.push(["·", "No 17–18 voter at this address (would be T1)"]);
     }
     return checks;
   }
@@ -1093,9 +1047,9 @@
       `Tier code: ${tierKey}`,
       `Lead score: ${r.evidence_score ?? "—"}`,
       `Surname match: ${r.owner_voter_surname_match === true ? "yes" : r.owner_voter_surname_match === false ? "no" : "unknown"}`,
+      `Surname review: ${r.owner_voter_review || "—"}`,
       `17–18 voters: ${r.count_17_18_voters ?? 0}`,
       `19–20 voters: ${r.count_19_20_voters ?? 0}`,
-      `Datazapp match: ${r.datazapp_hit ? "yes" : "no"}`,
       ``,
       `Derivation:`,
       debugChecks,
@@ -1158,6 +1112,181 @@
     } else {
       const slot = $("#dVoterList");
       if (slot) slot.innerHTML = `<div class="muted small">—</div>`;
+    }
+
+    // Review-mode panel: render below the banner when the dev pass is active
+    // and this household is an unreviewed owner-voter surname mismatch.
+    if (state.review.enabled && r.owner_voter_surname_match === false) {
+      renderReviewPanel(r);
+    }
+  }
+
+  // ── Surname-mismatch review (dev only) ──────────────────────────────
+  // One-time pass to classify the ~343 households where the parcel owner's
+  // surname does not match any voter at the address. Classifications are
+  // staged in localStorage; "Export SQL" emits a single UPDATE batch the
+  // user pastes into the Supabase SQL editor. Gated on dev_review=1.
+  const REVIEW_KEY = "hhsp_review_classifications_v1";
+  const REVIEW_OPTIONS = [
+    { code: "owner_lives_here",   label: "Owner lives here",        hint: "Title is in a different surname (maiden, hyphenated) but the family is in residence" },
+    { code: "trust_or_llc",       label: "Trust / LLC",             hint: "Title in a trust or LLC; the resident family is the beneficiary" },
+    { code: "absentee_or_rental", label: "Absentee / rental",       hint: "Owner does not live there; voters are tenants" },
+    { code: "unclear",            label: "Unclear",                  hint: "Couldn't determine from available data" },
+  ];
+
+  function loadReviewMap() {
+    try { return JSON.parse(localStorage.getItem(REVIEW_KEY) || "{}") || {}; }
+    catch { return {}; }
+  }
+  function saveReviewMap(m) {
+    localStorage.setItem(REVIEW_KEY, JSON.stringify(m));
+  }
+  function reviewIsDev() {
+    try { return localStorage.getItem("dev_review") === "1"; } catch { return false; }
+  }
+  function reviewMismatchTargets() {
+    return state.targets.filter(r => r.owner_voter_surname_match === false);
+  }
+  function refreshReviewProgress() {
+    const total = reviewMismatchTargets().length;
+    const m = loadReviewMap();
+    const done = Object.keys(m).length;
+    const slot = $("#reviewProgress");
+    if (slot) slot.textContent = `${done} of ${total} classified${total ? ` (${Math.round(100*done/total)}%)` : ""}`;
+  }
+  function startReview() {
+    const all = reviewMismatchTargets();
+    if (!all.length) { toast("No surname mismatches to review."); return; }
+    const m = loadReviewMap();
+    // Build worklist: tier+score order, unclassified first.
+    const ordered = all.slice().sort((a, b) => {
+      const ar = TIER_RANK[a.tier] ?? 99, br = TIER_RANK[b.tier] ?? 99;
+      if (ar !== br) return ar - br;
+      return (b.evidence_score ?? -Infinity) - (a.evidence_score ?? -Infinity);
+    });
+    const pending = ordered.filter(r => !m[r.household_id]);
+    const next = pending[0] || ordered[0];
+    state.review.enabled = true;
+    state.review.worklist = ordered.map(r => r.household_id);
+    state.review.cursor = state.review.worklist.indexOf(next.household_id);
+    state._closeSidebar?.();
+    openDrawer(next.household_id);
+  }
+  function recordReviewClassification(hhId, code) {
+    const m = loadReviewMap();
+    m[hhId] = code;
+    saveReviewMap(m);
+    refreshReviewProgress();
+    advanceReview();
+  }
+  function advanceReview() {
+    const wl = state.review.worklist;
+    if (!wl.length) return;
+    const m = loadReviewMap();
+    // Step forward to the next unclassified entry; wrap around once.
+    const start = state.review.cursor;
+    for (let step = 1; step <= wl.length; step++) {
+      const idx = (start + step) % wl.length;
+      if (!m[wl[idx]]) { state.review.cursor = idx; openDrawer(wl[idx]); return; }
+    }
+    // All done.
+    $("#drawer").hidden = true;
+    toast("All mismatches classified. Click Export SQL to emit the UPDATE batch.");
+  }
+  function reviewExportSql() {
+    const m = loadReviewMap();
+    const entries = Object.entries(m);
+    if (!entries.length) { toast("No classifications to export."); return; }
+    const lines = [
+      `-- Surname-mismatch review classifications (${entries.length} rows).`,
+      `-- Generated ${new Date().toISOString()} by the dev review tool.`,
+      `-- Paste into the Supabase SQL editor and run; then re-run recompute_tiers().`,
+      ``,
+      `BEGIN;`,
+      ...entries.map(([hh, code]) =>
+        `UPDATE households SET owner_voter_review = '${code}' WHERE id = '${hh}';`),
+      `SELECT recompute_tiers(CURRENT_DATE);`,
+      `COMMIT;`,
+      ``,
+    ];
+    const text = lines.join("\n");
+    const today = new Date().toISOString().slice(0, 10);
+    downloadCsv(`surname-review-${today}.sql`, text);
+  }
+  function renderReviewPanel(r) {
+    const m = loadReviewMap();
+    const existing = m[r.household_id];
+    const ownerSurname = r.surname_key
+      ? titleCase(r.surname_key)
+      : "—";
+    const idx = state.review.worklist.indexOf(r.household_id);
+    const total = state.review.worklist.length;
+    const pos = idx >= 0 ? `${idx + 1} of ${total}` : "—";
+
+    const buttons = REVIEW_OPTIONS.map(opt => `
+      <button class="btn ${existing === opt.code ? "primary" : ""}" data-review-classify="${opt.code}" title="${escape(opt.hint)}">${escape(opt.label)}</button>`).join("");
+
+    const html = `
+      <div class="review-banner">
+        <strong>Review mode</strong> · ${escape(pos)}${existing ? ` · already classified: ${escape(existing)}` : ""}
+      </div>
+      <div class="section-h">Surname-mismatch classification</div>
+      <div class="review-pair">
+        <span class="k">Parcel owner surname</span><span class="v">${escape(ownerSurname)}</span>
+        <span class="k">Voters at this address</span><span class="v" id="dReviewVoterSurnames">loading…</span>
+      </div>
+      <div class="review-actions">${buttons}</div>
+      <div class="review-actions">
+        <button class="btn ghost" id="reviewSkipBtn">Skip (don't classify)</button>
+        <button class="btn ghost" id="reviewPrevBtn">← Previous</button>
+      </div>
+    `;
+    // Inject panel right after the banner so it's the first thing the eye lands on.
+    const body = $("#drawerBody");
+    const panel = document.createElement("div");
+    panel.id = "dReviewPanel";
+    panel.innerHTML = html;
+    body.insertBefore(panel, body.firstChild.nextSibling);
+
+    // Wire buttons
+    panel.querySelectorAll("[data-review-classify]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        recordReviewClassification(r.household_id, btn.dataset.reviewClassify);
+      });
+    });
+    $("#reviewSkipBtn").addEventListener("click", () => advanceReview());
+    $("#reviewPrevBtn").addEventListener("click", () => {
+      const wl = state.review.worklist;
+      const start = state.review.cursor;
+      for (let step = 1; step <= wl.length; step++) {
+        const i = (start - step + wl.length) % wl.length;
+        state.review.cursor = i;
+        openDrawer(wl[i]);
+        return;
+      }
+    });
+
+    // Fill in the voter surnames once the existing voter-roster query returns.
+    // openDrawer kicked that off; here we observe the #dVoterList children.
+    const surnameSlot = $("#dReviewVoterSurnames");
+    if (!surnameSlot) return;
+    const fillSurnames = () => {
+      const list = $("#dVoterList");
+      if (!list) return false;
+      const rows = Array.from(list.querySelectorAll(".voter-row span:first-child"));
+      if (!rows.length) return false;
+      const surnames = Array.from(new Set(rows.map(s => {
+        const txt = (s.textContent || "").trim();
+        const i = txt.lastIndexOf(" ");
+        return i > 0 ? txt.slice(i + 1) : txt;
+      }).filter(Boolean)));
+      surnameSlot.textContent = surnames.length ? surnames.join(", ") : "—";
+      return true;
+    };
+    if (!fillSurnames()) {
+      const obs = new MutationObserver(() => { if (fillSurnames()) obs.disconnect(); });
+      const list = $("#dVoterList");
+      if (list) obs.observe(list, { childList: true, subtree: true });
     }
   }
 
@@ -1378,6 +1507,21 @@
       if (!$("#settingsModal").hidden) { $("#settingsModal").hidden = true; return; }
       if ($("#sidebar").classList.contains("open")) { state._closeSidebar?.(); return; }
     });
+
+    // Surname-mismatch review tool — dev only, gated on localStorage.dev_review.
+    if (reviewIsDev()) {
+      const section = $("#reviewSection");
+      if (section) section.hidden = false;
+      refreshReviewProgress();
+      $("#reviewStartBtn")?.addEventListener("click", () => startReview());
+      $("#reviewExportBtn")?.addEventListener("click", () => reviewExportSql());
+      $("#reviewClearBtn")?.addEventListener("click", () => {
+        if (!confirm("Discard all local classifications? They have not been written to the database.")) return;
+        localStorage.removeItem(REVIEW_KEY);
+        refreshReviewProgress();
+        toast("Local classifications cleared.");
+      });
+    }
   }
 
   let renderT;

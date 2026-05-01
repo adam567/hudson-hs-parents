@@ -18,8 +18,8 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      TARGET_ZIPS: ${{ vars.TARGET_ZIPS || '44236' }}
-      TARGET_CITY: ${{ vars.TARGET_CITY || 'HUDSON' }}
+      TARGET_ZIPS: ${{ vars.TARGET_ZIPS || '44236,44264' }}
+      TARGET_CITIES: ${{ vars.TARGET_CITIES || 'HUDSON,PENINSULA' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -39,15 +39,6 @@ jobs:
             python scripts/load_voter_file.py data/voter/latest.csv
           else
             echo "::warning::no voter file at data/voter/latest.csv — skipping voter refresh"
-          fi
-
-      # Datazapp: refreshed annually before each spring campaign
-      - name: Load Datazapp (if present)
-        run: |
-          if [ -f "data/datazapp/latest.csv" ]; then
-            python scripts/load_datazapp.py data/datazapp/latest.csv --label spring2026
-          else
-            echo "::warning::no Datazapp file at data/datazapp/latest.csv — skipping"
           fi
 
       # Build the household spine + recompute tiers

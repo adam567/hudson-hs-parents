@@ -68,27 +68,26 @@ def fetch_active_campaign(user_id: str) -> dict | None:
 
 
 TIER_LABEL = {
-    "T1":  "Confirmed Senior",
-    "T2":  "Likely Senior — List Match",
-    "T4":  "Possible Senior — List Match + Parent-Aged Voter",
-    "T2b": "Two Parent-Aged Adults — 8+ Years",
-    "T5":  "List Match",
-    "T3":  "Recent Grad",
+    "T1": "Confirmed Senior",
+    "T2": "Likely Senior — Parent Pattern",
+    "T3": "Recent Grad",
 }
 TIER_LABEL_SHORT = {
-    "T1": "Confirmed", "T2": "List+2", "T4": "List+1",
-    "T2b": "2 voters/8+yr", "T5": "List only", "T3": "Recent grad",
+    "T1": "Confirmed", "T2": "Parent pattern", "T3": "Recent grad",
 }
-TIER_RANK = {"T1": 1, "T2": 2, "T4": 3, "T2b": 4, "T5": 5, "T3": 6}
-DEFAULT_DIGEST_TIERS = ("T1", "T2", "T4", "T2b")
+TIER_RANK = {"T1": 1, "T2": 2, "T3": 3}
+DEFAULT_DIGEST_TIERS = ("T1", "T2")
 
 
 def _sanitize(s: str) -> str:
-    return (s or "").replace("Datazapp College-Bound match", "matched a national college-bound parents list").replace("Datazapp", "the national parents list")
+    # Identity passthrough — kept so the call sites stay stable. Vendor-name
+    # sanitisation used to live here; the migration that retired the vendor
+    # also stripped its text from why_sentence at the source.
+    return s or ""
 
 
 def fetch_top_doors(campaign_id: str, since_iso: str | None) -> list[dict]:
-    """Top households per priority tier (defaults to T1, T2, T4, T2b)."""
+    """Top households per priority tier (defaults to T1, T2)."""
     tier_filter = ",".join(DEFAULT_DIGEST_TIERS)
     r = sb_request("GET",
         "/v_targets?select=household_id,display_name,situs_address,situs_city,tier,evidence_score,why_sentence&"

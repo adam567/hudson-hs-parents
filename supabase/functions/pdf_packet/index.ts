@@ -50,12 +50,9 @@ function buildHtml(camp: { name: string; anchor_date: string }, households: Hous
   }, {} as Record<string, number>);
   // Public-facing names; matches the priority order shown in the web UI.
   const tierDisplay: [string, string][] = [
-    ["T1",  "Confirmed"],
-    ["T2",  "List+2 voters"],
-    ["T4",  "List+1 voter"],
-    ["T2b", "2 voters/8+yr"],
-    ["T5",  "List only"],
-    ["T3",  "Recent grad"],
+    ["T1", "Confirmed"],
+    ["T2", "Parent pattern"],
+    ["T3", "Recent grad"],
   ];
   const tierLine = tierDisplay
     .filter(([code]) => tierCounts[code])
@@ -75,29 +72,22 @@ function buildHtml(camp: { name: string; anchor_date: string }, households: Hous
     svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;border:1px solid #cdc7b8;border-radius:6px;background:#fdfcf8">`
         + pts.map((h) => {
             // Color matches the web UI per-tier palette.
-            const c = h.tier === "T1"  ? "#b51e2a"
-                    : h.tier === "T2"  ? "#c87423"
-                    : h.tier === "T4"  ? "#4a6a8c"
-                    : h.tier === "T2b" ? "#d6a36a"
-                    : h.tier === "T3"  ? "#c69b3b"
-                    :                    "#8b8e93";  // T5 / unknown
-            const r = h.tier === "T1" ? 5 : (h.tier === "T2" || h.tier === "T4") ? 4 : 3;
+            const c = h.tier === "T1" ? "#b51e2a"
+                    : h.tier === "T2" ? "#c87423"
+                    : h.tier === "T3" ? "#c69b3b"
+                    :                   "#8b8e93";
+            const r = h.tier === "T1" ? 5 : h.tier === "T2" ? 4 : 3;
             return `<circle cx="${x(h.lng!).toFixed(1)}" cy="${y(h.lat!).toFixed(1)}" r="${r}" fill="${c}" stroke="white" stroke-width="1"/>`;
           }).join("")
         + "</svg>";
   }
 
-  // Public-facing tier name + lead score column; "Why" sentence sanitized
-  // so the vendor name from recompute_tiers never leaks onto a printed page.
   const TIER_LABEL_PDF: Record<string, string> = {
-    T1:  "Confirmed Senior",
-    T2:  "Likely Senior — List Match",
-    T4:  "Possible Senior — List Match + Parent-Aged Voter",
-    T2b: "Two Parent-Aged Adults — 8+ Years",
-    T5:  "List Match",
-    T3:  "Recent Grad",
+    T1: "Confirmed Senior",
+    T2: "Likely Senior — Parent Pattern",
+    T3: "Recent Grad",
   };
-  const sanitize = (s: string) => s.replace(/Datazapp College-Bound match/gi, "matched a national college-bound parents list").replace(/Datazapp/gi, "the national parents list");
+  const sanitize = (s: string) => s;
   const rows = households.map((h, i) => `
     <tr>
       <td style="text-align:right;color:#6b6b70">${i + 1}</td>
@@ -170,10 +160,9 @@ serve(async (req) => {
   if (household_ids && Array.isArray(household_ids) && household_ids.length) {
     q = q.in("household_id", household_ids);
   } else {
-    // Default headless export = priority order's top 4 tiers (T1 confirmed,
-    // T2 list+strong, T4 list+voter, T2b two-voter inference). Excludes T5
-    // (list-only, lower confidence) and T3 (off-thesis recent grad).
-    q = q.in("tier", ["T1","T2","T4","T2b"]).limit(200);
+    // Default headless export = T1 (confirmed senior) + T2 (parent-pattern
+    // inferred). Excludes T3 (off-thesis recent grad).
+    q = q.in("tier", ["T1","T2"]).limit(200);
   }
 
   const { data: households, error: hhErr } = await q;

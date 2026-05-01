@@ -35,27 +35,24 @@ supabase db push --include-all
 
 ## 4. Stage the data files
 
-Two CSVs go in `data/` (gitignored — never commit them):
+One CSV goes in `data/` (gitignored — never commit it):
 
-- `data/voter/latest.csv` — Ohio voter file filtered to Hudson 44236 (or full Summit; the loader filters)
-- `data/datazapp/latest.csv` — the Datazapp College-Bound Senior export
+- `data/voter/latest.csv` — Ohio voter file filtered to Hudson + Peninsula (or full Summit; the loader filters)
 
-For local first run, you can point the scripts directly at the files you have:
+For local first run, point the scripts directly at the files you have:
 
 ```bash
 export SUPABASE_URL="https://...supabase.co"
 export SUPABASE_SERVICE_ROLE_KEY="..."
 python scripts/load_parcels.py
 python scripts/load_voter_file.py "C:/realestate/VoterRolls/voterfile (1).csv"
-python scripts/load_datazapp.py "C:/realestate/GIKIRW.csv" --label spring2026
 python scripts/build_households.py --anchor 2026-05-01
 ```
 
-Last command runs `recompute_tiers` and prints tier counts. Should look like:
-
-```
-[households] tier counts: {'T1': ~198, 'T2': ~501, 'T3': ~482, 'T4': ~202, 'T5': ~466, 'TX': ~5500}
-```
+Last command runs `recompute_tiers` and prints tier counts. T1 should be the
+voter-confirmed senior addresses; T2 is the consolidated voter-pattern tier
+(two parent-age adults, 8+ years owned, owner-occupied, non-institutional);
+T3 is recent-grad (off-thesis adjacent).
 
 ## 5. Configure GitHub repo
 
@@ -77,8 +74,8 @@ Variables:
 
 | Name | Default |
 |---|---|
-| `TARGET_ZIPS` | `44236` |
-| `TARGET_CITY` | `HUDSON` |
+| `TARGET_ZIPS` | `44236,44264` |
+| `TARGET_CITIES` | `HUDSON,PENINSULA` |
 | `DIGEST_FROM` | `Hudson HS Parents <noreply@yourdomain.com>` |
 
 Settings → Pages → Source: **GitHub Actions**.
@@ -100,7 +97,7 @@ In the app:
 
 ## What runs automatically
 
-- **Mondays 06:17 UTC** — voter + parcel + Datazapp refresh, tier recompute (`refresh-data.yml`)
+- **Mondays 06:17 UTC** — voter + parcel refresh, tier recompute (`refresh-data.yml`)
 - **Daily 11:00 UTC** — digest sender (only emails users whose cadence is due)
 - **On push to `main`** touching `site/**` — Pages redeploy
 - **On push to `main`** touching `supabase/**` — DB + functions push
@@ -110,5 +107,4 @@ In the app:
 - **Supabase free tier:** fits this app for years
 - **GitHub Pages + Actions:** unlimited for public repos
 - **Resend:** free tier covers the digest volume
-- **Datazapp:** $125 once a year before each spring campaign
-- **Total recurring:** $125/yr
+- **Total recurring:** $0/yr (public records only)

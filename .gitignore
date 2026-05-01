@@ -21,3 +21,7 @@ Thumbs.db
 # Supabase locals
 .supabase/
 supabase/.temp/
+
+# Local scratch / one-off data dumps
+_scratch/
+*.png

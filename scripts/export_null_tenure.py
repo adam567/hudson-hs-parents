@@ -51,17 +51,15 @@ def _priority(row: dict) -> int:
     """Lower number = higher priority for manual lookup."""
     if row.get("has_17_18_voter"):
         return 0  # T1 candidate, urgent
-    if row.get("datazapp_hit"):
-        return 1  # DZ hit, useful
     if (row.get("adult_42_63_count") or 0) >= 2 and _is_likely_residential(row):
-        return 2  # voter-pattern T2b candidate
+        return 1  # voter-pattern T2 candidate
     if _is_likely_residential(row) and row.get("owner_occ"):
-        return 3  # residential owner-occupied
+        return 2  # residential owner-occupied
     if _is_likely_residential(row):
-        return 4  # residential other
+        return 3  # residential other
     if _is_institutional(row.get("owner1") or ""):
         return 9  # public/HOA — skip
-    return 5  # vacant land or other
+    return 4  # vacant land or other
 
 
 def fetch_null_parcels() -> list[dict[str, Any]]:
@@ -92,14 +90,14 @@ def fetch_null_parcels() -> list[dict[str, Any]]:
 
 
 def fetch_household_signals() -> dict[str, dict]:
-    """Map address_key → {tier, has_17_18_voter, adult_42_63_count, datazapp_hit}."""
+    """Map address_key → {tier, has_17_18_voter, adult_42_63_count}."""
     out: dict[str, dict] = {}
     offset = 0
     page = 1000
     while True:
         path = (
             f"/households?select=address_key,tier,has_17_18_voter,"
-            f"adult_42_63_count,datazapp_hit&limit={page}&offset={offset}"
+            f"adult_42_63_count&limit={page}&offset={offset}"
         )
         r = request("GET", path)
         chunk = r.json()
@@ -159,7 +157,6 @@ def main() -> None:
             "tier":               h.get("tier", ""),
             "has_17_18_voter":    h.get("has_17_18_voter", False),
             "adult_42_63_count":  h.get("adult_42_63_count", 0),
-            "datazapp_hit":       h.get("datazapp_hit", False),
             "summit_lookup_url":  SUMMIT_LOOKUP_URL_TEMPLATE.format(parcel_id=p.get("county_parcel_id") or ""),
         }
         row["priority"] = _priority(row)
@@ -174,7 +171,7 @@ def main() -> None:
     fieldnames = [
         "priority", "tier", "parcel_id", "address", "zip",
         "owner1", "owner2", "market_value", "year_built", "sqft",
-        "owner_occ", "has_17_18_voter", "adult_42_63_count", "datazapp_hit",
+        "owner_occ", "has_17_18_voter", "adult_42_63_count",
         "summit_lookup_url",
     ]
     with open(out_path, "w", newline="", encoding="utf-8-sig") as f:
@@ -190,11 +187,10 @@ def main() -> None:
     print("[null_tenure] priority distribution:")
     labels = {
         0: "0 — has 17/18-yo voter (T1 candidate)",
-        1: "1 — Datazapp hit",
-        2: "2 — voter-pattern T2b candidate",
-        3: "3 — residential owner-occupied",
-        4: "4 — residential other",
-        5: "5 — vacant / other",
+        1: "1 — voter-pattern T2 candidate",
+        2: "2 — residential owner-occupied",
+        3: "3 — residential other",
+        4: "4 — vacant / other",
         9: "9 — institutional (public, HOA, school, church)",
     }
     for k in sorted(by_priority):

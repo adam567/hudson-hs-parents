@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Build the households spine — one row per address_key, joined across
-parcel + voter + Datazapp. Computes voter rollups (counts by age band,
-adult age bands, surname-match flag) and Datazapp hit. Then calls
-recompute_tiers() to assign tier + evidence_score + chips + why_sentence.
+parcel + voter. Computes voter rollups (counts by age band, adult age
+bands, surname-match flag). Then calls recompute_tiers() to assign tier +
+evidence_score + chips + why_sentence.
 
 Usage:
     python scripts/build_households.py [--anchor 2026-05-01]
@@ -98,25 +98,15 @@ def main() -> None:
         "address_key,first_name,last_name,birth_year,reg_date")
     print(f"[households] {len(voters)} voter records")
 
-    print("[households] loading Datazapp imports …")
-    datazapp = page_through("datazapp_imports", "address_key,first_name,last_name")
-    print(f"[households] {len(datazapp)} Datazapp records")
-
     voters_by_addr: dict[str, list[dict]] = defaultdict(list)
     for v in voters:
         if v.get("address_key"):
             voters_by_addr[v["address_key"]].append(v)
 
-    datazapp_by_addr: dict[str, list[dict]] = defaultdict(list)
-    for d in datazapp:
-        if d.get("address_key"):
-            datazapp_by_addr[d["address_key"]].append(d)
-
     rows: list[dict] = []
     for p in parcels:
         ak = p["address_key"]
         vs = voters_by_addr.get(ak, [])
-        ds = datazapp_by_addr.get(ak, [])
 
         ages = [age_at(v.get("birth_year"), anchor) for v in vs]
         ages = [a for a in ages if a is not None]
@@ -189,8 +179,6 @@ def main() -> None:
             "adult_count": adult_count,
             "same_surname_youth_to_adult": same_surname,
             "senior_reg_date_min": senior_reg_min,
-            "datazapp_hit": len(ds) > 0,
-            "datazapp_match_count": len(ds),
             "institutional_owner": institutional_flag,
             "out_of_hudson_mailing": out_of_hudson(p),
             "refreshed_at": datetime.utcnow().isoformat() + "Z",
@@ -201,8 +189,8 @@ def main() -> None:
 
     # Dedupe by address_key — multi-parcel addresses (condos, multi-unit, lot
     # splits) collide on the unique address_key index. Keep the parcel with the
-    # highest market_value as the primary; voter/Datazapp counts are address-
-    # keyed so they're identical across the dropped duplicates.
+    # highest market_value as the primary; voter counts are address-keyed so
+    # they're identical across the dropped duplicates.
     by_ak: dict[str, dict] = {}
     for r in rows:
         existing = by_ak.get(r["address_key"])
