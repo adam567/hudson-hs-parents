@@ -8,7 +8,7 @@
 <title>Hudson HS Parents</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" crossorigin="">
-<link rel="stylesheet" href="styles.css?v=t2b1">
+<link rel="stylesheet" href="styles.css?v=lex1">
 </head>
 <body>
 
@@ -53,15 +53,31 @@
     <!-- Filters tab -->
     <div class="tab-pane" data-pane="filters">
 
+      <div class="adjacent-intro" id="adjacentIntro" hidden>
+        <div class="adjacent-intro-body">
+          <strong>New: Adjacent leads.</strong>
+          We also flag households where a 19- or 20-year-old voter is on file — likely a recent grad. They're off your stated thesis (selling because the kid is graduating <em>now</em>), so they're off by default. Turn them on if you want to widen the funnel.
+        </div>
+        <div class="adjacent-intro-actions">
+          <button class="btn primary" id="adjacentIntroEnable">Turn on</button>
+          <button class="btn ghost" id="adjacentIntroDismiss">Dismiss</button>
+        </div>
+      </div>
+
       <section class="filter-section">
-        <h3>Signal tiers</h3>
-        <p class="muted small mb">Solid + larger pins = stronger signal.</p>
-        <label class="tier-toggle"><input type="checkbox" data-tier="T1" checked> <span class="pin-preview T1"></span> T1 — Current senior <span class="count" data-count="T1">—</span></label>
-        <label class="tier-toggle"><input type="checkbox" data-tier="T2" checked> <span class="pin-preview T2"></span> T2 — Likely senior (Datazapp + voter pattern) <span class="count" data-count="T2">—</span></label>
-        <label class="tier-toggle"><input type="checkbox" data-tier="T2b"> <span class="pin-preview T2b"></span> T2b — Likely senior (voter pattern only, no DZ) <span class="count" data-count="T2b">—</span></label>
-        <label class="tier-toggle"><input type="checkbox" data-tier="T3"> <span class="pin-preview T3"></span> T3 — Recent grad <span class="count" data-count="T3">—</span></label>
-        <label class="tier-toggle"><input type="checkbox" data-tier="T4"> <span class="pin-preview T4"></span> T4 — Younger-sibling keeper <span class="count" data-count="T4">—</span></label>
-        <label class="tier-toggle"><input type="checkbox" data-tier="T5"> <span class="pin-preview T5"></span> T5 — Weak inference <span class="count" data-count="T5">—</span></label>
+        <h3>Senior leads</h3>
+        <p class="muted small mb">Larger, brighter dots = stronger leads.</p>
+        <label class="tier-toggle"><input type="checkbox" data-tier="T1" checked> <span class="pin-preview T1"></span> <span class="tier-label-text"><span class="tier-name">Confirmed senior</span><span class="tier-basis muted small">A senior-age student is registered to vote here.</span></span> <span class="count" data-count="T1">—</span></label>
+        <label class="tier-toggle"><input type="checkbox" data-tier="T2" checked> <span class="pin-preview T2"></span> <span class="tier-label-text"><span class="tier-name">Likely senior — strong match</span><span class="tier-basis muted small">Matches a national parents list, plus the household pattern fits.</span></span> <span class="count" data-count="T2">—</span></label>
+        <label class="tier-toggle"><input type="checkbox" data-tier="T2b"> <span class="pin-preview T2b"></span> <span class="tier-label-text"><span class="tier-name">Likely senior — household pattern</span><span class="tier-basis muted small">Two parent-age adults, long tenure — but no list match. Inferred.</span></span> <span class="count" data-count="T2b">—</span></label>
+        <label class="tier-toggle"><input type="checkbox" data-tier="T4"> <span class="pin-preview T4"></span> <span class="tier-label-text"><span class="tier-name">Possible senior — partial match</span><span class="tier-basis muted small">Matches a national parents list, but missing a second adult or long tenure.</span></span> <span class="count" data-count="T4">—</span></label>
+        <label class="tier-toggle"><input type="checkbox" data-tier="T5"> <span class="pin-preview T5"></span> <span class="tier-label-text"><span class="tier-name">Possible senior — list match only</span><span class="tier-basis muted small">Matches a national parents list. Nothing else corroborates it.</span></span> <span class="count" data-count="T5">—</span></label>
+      </section>
+
+      <section class="filter-section adjacent-section">
+        <h3>Adjacent — recent graduates</h3>
+        <p class="muted small mb">Their kid is age 19–20 and may have already left home. Off thesis — turn on if you want to widen the funnel.</p>
+        <label class="tier-toggle"><input type="checkbox" data-tier="T3"> <span class="pin-preview T3"></span> <span class="tier-label-text"><span class="tier-name">Recent grad — adjacent</span><span class="tier-basis muted small">A 19- or 20-year-old is registered to vote here.</span></span> <span class="count" data-count="T3">—</span></label>
       </section>
 
       <section class="filter-section">
@@ -98,11 +114,11 @@
             <option value="3">3+</option>
           </select>
         </label>
-        <label>Mailing matches situs
+        <label>Owner's mailing address
           <select id="filterMailing">
             <option value="">include all</option>
-            <option value="only">only owner-occupied</option>
-            <option value="exclude">exclude absentee</option>
+            <option value="only">only owner lives here</option>
+            <option value="exclude">exclude — mail goes elsewhere</option>
           </select>
         </label>
       </section>
@@ -137,15 +153,21 @@
         <h3>Quick cohorts</h3>
         <p class="muted small mb">Click to apply. Click again to remove. Multiple stack.</p>
         <div class="chips" id="cohortChips">
-          <button class="chip" data-cohort="younger_siblings">Younger-sibling keepers</button>
-          <button class="chip" data-cohort="recent_grads">Recent grads</button>
-          <button class="chip" data-cohort="long_tenure_15">Long tenure 15+</button>
-          <button class="chip" data-cohort="long_tenure_25">Long tenure 25+</button>
-          <button class="chip" data-cohort="top_value">Top value quartile</button>
-          <button class="chip" data-cohort="two_adults">Two-adult households</button>
-          <button class="chip" data-cohort="single_adult">Single-adult deprioritized</button>
-          <button class="chip" data-cohort="dz_voter">Datazapp + voter</button>
-          <button class="chip" data-cohort="dz_only">Datazapp only</button>
+          <button class="chip" data-cohort="younger_siblings">Has a younger sibling at home</button>
+          <button class="chip" data-cohort="long_tenure_15">15+ years owned</button>
+          <button class="chip" data-cohort="long_tenure_25">25+ years owned</button>
+          <button class="chip" data-cohort="top_value">Top 25% by home value</button>
+          <button class="chip" data-cohort="two_adults">Two adults at address</button>
+          <button class="chip" data-cohort="single_adult">One adult at address</button>
+          <button class="chip" data-cohort="dz_voter">List match + senior on voter records</button>
+          <button class="chip" data-cohort="dz_only">List match only — no other signal</button>
+        </div>
+      </section>
+      <section class="filter-section adjacent-section">
+        <h3>Adjacent</h3>
+        <p class="muted small mb">Off thesis — recent grads only.</p>
+        <div class="chips">
+          <button class="chip" data-cohort="recent_grads">Recent grads only</button>
         </div>
       </section>
     </div>
@@ -179,7 +201,7 @@
         <h3>Saved filter recipes</h3>
         <p class="muted small mb">Save the current filter set as a named recipe.</p>
         <div class="recipe-row">
-          <input type="text" id="recipeName" placeholder="e.g. Spring 2026 Tier 1 Hot Zones">
+          <input type="text" id="recipeName" placeholder="e.g. Spring 2026 confirmed seniors">
           <button class="btn primary" id="saveRecipeBtn">Save</button>
         </div>
         <div id="savedRecipeList" class="saved-list"></div>
@@ -215,12 +237,12 @@
               <th class="check-col"><input type="checkbox" id="selectAllCb" title="Select all visible"></th>
               <th data-sort="display_name" class="sortable sorted-asc">Owner</th>
               <th data-sort="situs_address" class="sortable">Address</th>
-              <th data-sort="tier" class="sortable">Tier</th>
+              <th data-sort="tier" class="sortable">Lead</th>
               <th data-sort="market_value" class="sortable num">Value</th>
               <th data-sort="years_owned" class="sortable num">Yrs</th>
               <th data-sort="adult_count" class="sortable num">Adults</th>
-              <th data-sort="senior_score" class="sortable num">17–18</th>
-              <th data-sort="datazapp_hit" class="sortable">DZ</th>
+              <th data-sort="senior_score" class="sortable num">Senior</th>
+              <th data-sort="datazapp_hit" class="sortable">List match</th>
               <th class="tags-col">Tags</th>
             </tr>
           </thead>
@@ -277,7 +299,7 @@
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="app.js?v=t2b1"></script>
+<script src="app.js?v=lex1"></script>
 
 </body>
 </html>

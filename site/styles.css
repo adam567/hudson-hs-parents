@@ -175,9 +175,38 @@ label[title] { cursor: help; }
 .pin-preview.T1 { width: 14px; height: 14px; background: var(--t1); box-shadow: 0 0 0 2px var(--t1-ring), 0 0 0 3px rgba(0,0,0,0.15); }
 .pin-preview.T2 { width: 12px; height: 12px; background: var(--t2); box-shadow: 0 0 0 2px var(--t2-ring), 0 0 0 3px rgba(0,0,0,0.15); }
 .pin-preview.T2b { width: 11px; height: 11px; background: var(--t2b); box-shadow: 0 0 0 1.5px var(--t2b-ring), 0 0 0 2px rgba(0,0,0,0.12); opacity: 0.85; }
-.pin-preview.T3 { width: 11px; height: 11px; background: var(--t3); }
+/* T3 = adjacent leads (recent grads). Hollow rotated square so the eye reads
+   "different category" before it reads color, including for colorblind users. */
+.pin-preview.T3 {
+  width: 11px; height: 11px;
+  background: transparent;
+  border: 1.5px solid var(--t3-ring);
+  border-radius: 2px;
+  transform: rotate(45deg);
+  box-shadow: none;
+}
 .pin-preview.T4 { width: 10px; height: 10px; background: var(--t4); box-shadow: 0 0 0 2px var(--t4-ring); }
 .pin-preview.T5 { width: 9px;  height: 9px;  background: var(--t5); opacity: 0.7; }
+
+/* Tier-toggle text column (label name + basis line) */
+.tier-toggle { align-items: flex-start; }
+.tier-label-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.tier-label-text .tier-name { font-weight: 600; line-height: 1.25; }
+.tier-label-text .tier-basis { font-weight: 400; line-height: 1.3; }
+
+/* Adjacent-leads section visually quieter (hairline top rule) */
+.adjacent-section { padding-top: 14px; border-top: 1px solid var(--rule); }
+
+/* First-run intro banner for "Adjacent leads" */
+.adjacent-intro {
+  background: var(--accent-soft); border: 1px solid var(--rule-strong);
+  border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;
+  font-size: 13px; line-height: 1.45; color: var(--accent-ink);
+}
+.adjacent-intro-body { margin-bottom: 10px; }
+.adjacent-intro-body em { font-style: italic; }
+.adjacent-intro-actions { display: flex; gap: 8px; }
+.adjacent-intro-actions .btn { padding: 5px 12px; font-size: 13px; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {
@@ -258,11 +287,15 @@ label[title] { cursor: help; }
   box-shadow: 0 0 0 1.5px var(--t2b-ring), 0 1px 2px rgba(0,0,0,0.22);
   opacity: 0.85;
 }
+/* T3 marker: hollow rotated square (diamond). Distinct shape signals the
+   "adjacent — recent grad" category at a glance, before color is decoded. */
 .marker-T3 {
   width: 11px !important; height: 11px !important;
-  background: var(--t3);
-  border: 1px solid var(--t3-ring);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.25);
+  background: transparent;
+  border: 1.5px solid var(--t3-ring) !important;
+  border-radius: 2px !important;
+  transform: rotate(45deg);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.18);
 }
 .marker-T4 {
   width: 10px !important; height: 10px !important;
@@ -321,6 +354,81 @@ label[title] { cursor: help; }
   background: var(--accent-soft); color: var(--accent-ink);
   padding: 10px 12px; border-radius: 6px; font-size: 13px; line-height: 1.45;
   margin-bottom: 8px;
+}
+
+/* Conviction banner (top of household drawer, replaces the old engineer header).
+   Each tier paints the left-edge bar full strength and a low-alpha background. */
+.banner {
+  position: relative;
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 14px 12px 18px;
+  border-radius: 8px;
+  margin-bottom: 14px;
+  background: rgba(107,79,42,0.06);
+}
+.banner::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+  background: var(--accent); border-radius: 8px 0 0 8px;
+}
+.banner-glyph { font-size: 20px; line-height: 1.1; flex: 0 0 auto; }
+.banner-text { flex: 1; min-width: 0; }
+.banner-eyebrow {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--t3-ring); margin-bottom: 4px; display: block;
+}
+.banner-verdict { font-weight: 700; font-size: 15px; line-height: 1.3; margin-bottom: 4px; }
+.banner-basis   { font-size: 13px; line-height: 1.4; color: var(--ink); }
+
+.banner.banner--t1  { background: rgba(181,30,42,0.07); }
+.banner.banner--t1::before  { background: var(--t1); }
+.banner.banner--t2  { background: rgba(200,116,35,0.08); }
+.banner.banner--t2::before  { background: var(--t2); }
+.banner.banner--t2b { background: rgba(214,163,106,0.10); }
+.banner.banner--t2b::before { background: var(--t2b); }
+.banner.banner--t3  { background: rgba(198,155,59,0.07); }
+.banner.banner--t3::before  { background: var(--t3-ring); }
+.banner.banner--t4  { background: rgba(74,106,140,0.07); }
+.banner.banner--t4::before  { background: var(--t4); }
+.banner.banner--t5  { background: rgba(139,142,147,0.08); }
+.banner.banner--t5::before  { background: var(--t5); }
+
+.evidence-list { margin: 0 0 12px; padding: 0; list-style: none; }
+.evidence-list li {
+  display: flex; gap: 8px; align-items: baseline;
+  padding: 4px 0; font-size: 13.5px; line-height: 1.45;
+}
+.evidence-list .ev-mark {
+  flex: 0 0 18px; text-align: center; font-weight: 700; color: var(--good);
+}
+.evidence-list .ev-mark.ev-context { color: var(--muted); font-weight: 500; }
+
+.caveat-block {
+  border-left: 3px solid var(--rule-strong);
+  padding: 8px 12px; margin: 0 0 14px;
+  background: #fbf9f3; color: var(--muted);
+  font-size: 13px; line-height: 1.45; font-style: italic;
+  border-radius: 0 6px 6px 0;
+}
+
+.adjacent-pill {
+  display: inline-block;
+  padding: 2px 8px; margin-bottom: 4px;
+  background: rgba(198,155,59,0.18); color: var(--t3-ring);
+  border: 1px solid var(--t3-ring);
+  border-radius: 999px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+}
+
+.dName-dot { display: inline-block; vertical-align: middle; margin-right: 6px; }
+
+.drawer-debug { margin-top: 18px; font-size: 12px; color: var(--muted); }
+.drawer-debug summary { cursor: pointer; padding: 4px 0; }
+.drawer-debug-body {
+  margin-top: 6px; padding: 8px 10px; background: #fbf9f3;
+  border: 1px dashed var(--rule); border-radius: 6px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px; line-height: 1.5;
+  white-space: pre-wrap;
 }
 .check-list { margin-bottom: 12px; }
 .check-row {
@@ -442,7 +550,11 @@ label[title] { cursor: help; }
 .tier-badge.T1 { background: var(--t1); }
 .tier-badge.T2 { background: var(--t2); }
 .tier-badge.T2b { background: var(--t2b); color: #1d1d1f; }
-.tier-badge.T3 { background: var(--t3); color: #1d1d1f; }
+/* T3 = Adjacent — visually a hollow chip to mirror the diamond pin */
+.tier-badge.T3 {
+  background: transparent; color: var(--t3-ring);
+  border: 1px solid var(--t3-ring);
+}
 .tier-badge.T4 { background: var(--t4); }
 .tier-badge.T5 { background: var(--t5); }
 
