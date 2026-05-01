@@ -22,6 +22,11 @@ jobs:
       TARGET_CITIES: ${{ vars.TARGET_CITIES || 'HUDSON,PENINSULA' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Guard on service-role key
+        if: ${{ env.SUPABASE_SERVICE_ROLE_KEY == '' }}
+        run: |
+          echo "::error::SUPABASE_SERVICE_ROLE_KEY not set as a repo secret. Refresh cannot proceed. Set it via 'gh secret set SUPABASE_SERVICE_ROLE_KEY -R adam567/hudson-hs-parents'."
+          exit 1
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
       - run: pip install -r scripts/requirements.txt
