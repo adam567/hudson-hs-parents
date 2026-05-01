@@ -23,7 +23,7 @@ jobs:
       - name: Skip if service-role key not configured
         if: ${{ env.SUPABASE_SERVICE_ROLE_KEY == '' }}
         run: |
-          echo "::warning::SUPABASE_SERVICE_ROLE_KEY not set — skipping digest. Add it via 'gh secret set SUPABASE_SERVICE_ROLE_KEY -R adam567/hudson-hs-parents' to enable."
+          echo "::warning::SUPABASE_SERVICE_ROLE_KEY not set — skipping digest. Add it via 'gh secret set SUPABASE_SERVICE_ROLE_KEY -R adam567/heatmap' to enable."
       - name: Send digest
         if: ${{ env.SUPABASE_SERVICE_ROLE_KEY != '' }}
         run: python scripts/send_digest.py

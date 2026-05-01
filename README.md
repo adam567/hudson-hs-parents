@@ -2,7 +2,7 @@
 
 A seasonal door-knocking targeting tool for one Hudson, OH real-estate agent. Surfaces likely senior-parent households as pins on an interactive map, scores them by signal strength, lets her plan walks her own way.
 
-**Live:** https://adam567.github.io/hudson-hs-parents/
+**Live:** https://adam567.github.io/heatmap/
 
 ## What it does
 

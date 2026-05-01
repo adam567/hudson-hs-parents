@@ -18,7 +18,7 @@ jobs:
       - name: Guard on Supabase deploy secrets
         if: ${{ env.SUPABASE_ACCESS_TOKEN == '' || env.SUPABASE_PROJECT_REF == '' || env.SUPABASE_DB_PASSWORD == '' }}
         run: |
-          echo "::error::deploy-db requires SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_REF, and SUPABASE_DB_PASSWORD as repo secrets. Set them via 'gh secret set <NAME> -R adam567/hudson-hs-parents'. Today's migration was applied via the Supabase MCP, so this failing is non-blocking until the next migration."
+          echo "::error::deploy-db requires SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_REF, and SUPABASE_DB_PASSWORD as repo secrets. Set them via 'gh secret set <NAME> -R adam567/heatmap'. Today's migration was applied via the Supabase MCP, so this failing is non-blocking until the next migration."
           exit 1
       - uses: supabase/setup-cli@v1
         with: { version: latest }

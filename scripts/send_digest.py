@@ -122,7 +122,7 @@ def render_html(name: str, camp: dict, doors: list[dict]) -> str:
         <tbody>{rows}</tbody>
       </table>
       <p style="margin-top:14px;font-size:12px;color:#6b6b70">
-        Open the map to plan your walk → <a href="https://adam567.github.io/hudson-hs-parents/">Hudson HS Parents</a>
+        Open the map to plan your walk → <a href="https://adam567.github.io/heatmap/">Hudson HS Parents</a>
       </p>
     </div>
     """

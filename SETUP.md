@@ -56,7 +56,7 @@ T3 is recent-grad (off-thesis adjacent).
 
 ## 5. Configure GitHub repo
 
-Repo: `hudson-hs-parents` (new sibling to `hudson-leads`)
+Repo: `heatmap` (new sibling to `hudson-leads`)
 
 Secrets (Settings → Secrets and variables → Actions):
 
@@ -86,7 +86,7 @@ The first push triggers:
 - `deploy-pages.yml` — injects Supabase config and publishes the site
 - `deploy-db.yml` — pushes migrations + Edge Functions
 
-Visit `https://adam567.github.io/hudson-hs-parents/`. Sign in with the invited email, paste the OTP. The map loads.
+Visit `https://adam567.github.io/heatmap/`. Sign in with the invited email, paste the OTP. The map loads.
 
 ## 7. First campaign
 
