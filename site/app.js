@@ -177,27 +177,12 @@
         el.checked = enabled.has(el.dataset.tier);
       });
     }
-    // First-run intro banner for the "Adjacent leads" section.
-    if (!state.prefs?.adjacent_leads_intro_dismissed_at) {
-      const intro = $("#adjacentIntro");
-      if (intro) intro.hidden = false;
-    }
     // Apply persisted entity-owner toggle.
     if (state.prefs?.include_unresolved_entities === true) {
       state.filters.includeUnresolvedEntities = true;
       const cb = $("#filterIncludeEntities");
       if (cb) cb.checked = true;
     }
-  }
-
-  async function dismissAdjacentIntro() {
-    const intro = $("#adjacentIntro");
-    if (intro) intro.hidden = true;
-    if (!state.prefs) return;
-    state.prefs.adjacent_leads_intro_dismissed_at = new Date().toISOString();
-    await supabase.from("user_preferences")
-      .update({ adjacent_leads_intro_dismissed_at: state.prefs.adjacent_leads_intro_dismissed_at })
-      .eq("user_id", state.user.id);
   }
 
   async function markLastSeen() {
@@ -1460,19 +1445,6 @@
       }
       render();
     }));
-
-    // Adjacent-leads first-run banner buttons
-    const introEnable = $("#adjacentIntroEnable");
-    const introDismiss = $("#adjacentIntroDismiss");
-    if (introEnable) introEnable.addEventListener("click", () => {
-      state.filters.tiers.T3 = true;
-      const cb = $('[data-tier="T3"]'); if (cb) cb.checked = true;
-      persistVisibleTiers();
-      dismissAdjacentIntro();
-      render();
-      toast("Turned on Recent grad — adjacent");
-    });
-    if (introDismiss) introDismiss.addEventListener("click", () => dismissAdjacentIntro());
 
     // Map layers
     $("#layerHeatmap").addEventListener("change", () => drawMap());

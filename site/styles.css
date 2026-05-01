@@ -189,17 +189,6 @@ label[title] { cursor: help; }
 /* Adjacent-leads section visually quieter (hairline top rule) */
 .adjacent-section { padding-top: 14px; border-top: 1px solid var(--rule); }
 
-/* First-run intro banner for "Adjacent leads" */
-.adjacent-intro {
-  background: var(--accent-soft); border: 1px solid var(--rule-strong);
-  border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;
-  font-size: 13px; line-height: 1.45; color: var(--accent-ink);
-}
-.adjacent-intro-body { margin-bottom: 10px; }
-.adjacent-intro-body em { font-style: italic; }
-.adjacent-intro-actions { display: flex; gap: 8px; }
-.adjacent-intro-actions .btn { padding: 5px 12px; font-size: 13px; }
-
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {
   padding: 5px 10px; font-size: 12px; font-weight: 500;
