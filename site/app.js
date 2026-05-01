@@ -120,6 +120,15 @@
   $("#signInBtn").addEventListener("click", doSignIn);
   $("#password").addEventListener("keydown", (e) => { if (e.key === "Enter") doSignIn(); });
   $("#email").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#password").focus(); });
+  // Typing a quick-login key in the email field auto-fills the password so
+  // she doesn't have to remember (or type) it. Triggers on every input
+  // change; if she clears or edits the field to something non-matching, the
+  // password is left alone (no surprise blank-out).
+  $("#email").addEventListener("input", () => {
+    const k = $("#email").value.trim().toLowerCase();
+    const p = QUICK_LOGINS[k];
+    if (p) $("#password").value = p.password;
+  });
   $("#quickTsBtn")?.addEventListener("click", () => quickSignIn("ts"));
   $("#signOutBtn").addEventListener("click", async () => {
     await supabase.auth.signOut(); location.reload();
