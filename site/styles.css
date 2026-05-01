@@ -15,6 +15,8 @@
   --t1-ring: #d9a420;          /* gold ring */
   --t2: #c87423;              /* burnt orange */
   --t2-ring: #e3a95a;
+  --t2c: #d6a36a;             /* desaturated burnt orange — couple-only inference */
+  --t2c-ring: #ead0a0;
   --t3: #c69b3b;              /* amber */
   --t3-ring: #8a6822;
 
@@ -169,6 +171,7 @@ label[title] { cursor: help; }
 }
 .pin-preview.T1 { width: 14px; height: 14px; background: var(--t1); box-shadow: 0 0 0 2px var(--t1-ring), 0 0 0 3px rgba(0,0,0,0.15); }
 .pin-preview.T2 { width: 12px; height: 12px; background: var(--t2); box-shadow: 0 0 0 2px var(--t2-ring), 0 0 0 3px rgba(0,0,0,0.15); }
+.pin-preview.T2c { width: 10px; height: 10px; background: var(--t2c); box-shadow: 0 0 0 1.5px var(--t2c-ring), 0 0 0 2px rgba(0,0,0,0.12); opacity: 0.85; }
 /* T3 = adjacent leads (recent grads). Hollow rotated square so the eye reads
    "different category" before it reads color, including for colorblind users. */
 .pin-preview.T3 {
@@ -262,6 +265,14 @@ label[title] { cursor: help; }
   background: var(--t2);
   box-shadow: 0 0 0 2px var(--t2-ring), 0 1px 3px rgba(0,0,0,0.3);
 }
+.marker-T2c {
+  /* Smaller + softer than T2 — visually signals the weaker couple-only
+     inference at a glance without conflating with the stronger T2 pin. */
+  width: 10px !important; height: 10px !important;
+  background: var(--t2c);
+  box-shadow: 0 0 0 1.5px var(--t2c-ring), 0 1px 2px rgba(0,0,0,0.22);
+  opacity: 0.85;
+}
 /* T3 marker: hollow rotated square (diamond). Distinct shape signals the
    "adjacent — recent grad" category at a glance, before color is decoded. */
 .marker-T3 {
@@ -346,6 +357,8 @@ label[title] { cursor: help; }
 .banner.banner--t1::before  { background: var(--t1); }
 .banner.banner--t2  { background: rgba(200,116,35,0.08); }
 .banner.banner--t2::before  { background: var(--t2); }
+.banner.banner--t2c { background: rgba(214,163,106,0.10); }
+.banner.banner--t2c::before { background: var(--t2c); }
 .banner.banner--t3  { background: rgba(198,155,59,0.07); }
 .banner.banner--t3::before  { background: var(--t3-ring); }
 
@@ -553,6 +566,7 @@ label[title] { cursor: help; }
 }
 .tier-badge.T1 { background: var(--t1); }
 .tier-badge.T2 { background: var(--t2); }
+.tier-badge.T2c { background: var(--t2c); color: #1d1d1f; }
 /* T3 = Adjacent — visually a hollow chip to mirror the diamond pin */
 .tier-badge.T3 {
   background: transparent; color: var(--t3-ring);

@@ -46,7 +46,7 @@
     activeTagFilter: null,   // tag id, when filtering by a tag
     lastClickedIdx: -1,
     filters: {
-      tiers: { T1: true, T2: true, T3: false },
+      tiers: { T1: true, T2: true, T2c: false, T3: false },
       cohorts: new Set(),
       minValue: null, maxValue: null,
       minYears: null, maxYears: null,
@@ -172,7 +172,7 @@
     // Apply prefs to filter state
     if (state.prefs?.default_visible_tiers && Array.isArray(state.prefs.default_visible_tiers)) {
       const enabled = new Set(state.prefs.default_visible_tiers);
-      ["T1","T2","T3"].forEach(t => state.filters.tiers[t] = enabled.has(t));
+      ["T1","T2","T2c","T3"].forEach(t => state.filters.tiers[t] = enabled.has(t));
       $$("#sidebar [data-tier]").forEach(el => {
         el.checked = enabled.has(el.dataset.tier);
       });
@@ -226,7 +226,7 @@
   }
 
   function drawTierCounts() {
-    const counts = { T1: 0, T2: 0, T3: 0 };
+    const counts = { T1: 0, T2: 0, T2c: 0, T3: 0 };
     state.targets.forEach(r => { if (counts[r.tier] != null) counts[r.tier]++; });
     Object.entries(counts).forEach(([t, n]) => {
       const el = $(`[data-count="${t}"]`);
@@ -461,8 +461,12 @@
       const heatData = state.visibleSet
         .filter(r => r.lat && r.lng && r.tier !== "T3")  // T3 = adjacent, never contributes to senior density
         .map(r => {
-          // T1 = ground truth; T2 = inferred. T3 is excluded above.
-          const w = r.tier === "T1" ? 1.00 : 0.65;
+          // T1 = ground truth; T2 = family on file (inferred); T2c = weaker
+          // couple-only inference. T3 is excluded above.
+          const w = r.tier === "T1"  ? 1.00
+                  : r.tier === "T2"  ? 0.65
+                  : r.tier === "T2c" ? 0.35
+                  :                    0.20;
           return [r.lat, r.lng, w];
         });
       state.heatLayer = L.heatLayer(heatData, { radius: 24, blur: 18 }).addTo(state.map);
@@ -559,19 +563,20 @@
             || col === "parent_1" || col === "parent_2") ? "asc" : "desc";
   }
 
-  // Public-facing names. Internal tier codes (T1, T2, T3, TX) stay in the DB;
-  // this map is the single source of truth for what the user sees.
+  // Public-facing names. Internal tier codes (T1, T2, T2c, T3, TX) stay in
+  // the DB; this map is the single source of truth for what the user sees.
   const TIER_LABEL = {
-    T1: "Confirmed Senior",
-    T2: "Likely Senior — Parent Pattern",
-    T3: "Recent Grad",
+    T1:  "Confirmed Senior",
+    T2:  "Likely Senior — Family on File",
+    T2c: "Couple in Parent Age Range",
+    T3:  "Recent Grad",
   };
   // Numeric rank shown in the "Lead" badge column. T3 is off-thesis adjacent;
-  // its "Adj." label keeps it off the senior ladder rather than implying rank-3.
-  const TIER_BADGE = { T1: "1", T2: "2", T3: "Adj." };
+  // its "Adj." label keeps it off the senior ladder.
+  const TIER_BADGE = { T1: "1", T2: "2", T2c: "3", T3: "Adj." };
   // Sort/visual rank — drives table sort-by-Lead, sidebar order, marker size,
   // and heatmap weight. T3 stays last as an adjacent category.
-  const TIER_RANK = { T1: 1, T2: 2, T3: 3 };
+  const TIER_RANK = { T1: 1, T2: 2, T2c: 3, T3: 4 };
   // Identity passthrough — kept so callers below remain stable. Vendor-name
   // sanitisation used to live here; the migration that retired the vendor
   // also stripped its text from why_sentence at the source.
@@ -942,7 +947,12 @@
     },
     T2: {
       verdict: "A high-school senior likely lives here — inferred.",
-      basisFn: r => `Two parent-age adults (42–63) own this home and have lived here ${r.years_owned ?? "8+"} years — the textbook profile of a senior's parents — but no kid voter at this address confirms it.`,
+      basisFn: r => `${r.adult_count} adults are registered at this address: a parent-age couple (42–63) plus at least one more adult on file — typically an adult-age child still at home. ${r.years_owned ?? "8+"} years owned, owner-occupied.`,
+    },
+    T2c: {
+      verdict: "Maybe — a parent-age couple lives here.",
+      basisFn: r => `Exactly two adults are registered at this address, both age 42–63. ${r.years_owned ?? "8+"} years owned, owner-occupied. No other adults on file means there's no direct signal of children — could be empty-nesters already, parents of a not-yet-voting kid, or no kids at all.`,
+      eyebrow: "Weak signal",
     },
     T3: {
       verdict: "A recent high-school grad is registered here.",
@@ -952,12 +962,13 @@
   };
 
   // Glyph in the banner — color comes from the per-tier .banner--tX class.
-  const TIER_GLYPH = { T1: "●", T2: "●", T3: "◇" };
+  const TIER_GLYPH = { T1: "●", T2: "●", T2c: "○", T3: "◇" };
 
   // Per-tier "what we couldn't verify" caveat. Empty for T1 (verified).
   const TIER_CAVEAT = {
     T1: "",
-    T2: "No kid is registered to vote at this address. This is a pattern-based inference — strong, but unverified.",
+    T2: "No kid is registered to vote at this address. The third-or-more adult on file is the indirect signal — usually an adult-age child still living at home, but could also be an extended-family member.",
+    T2c: "Just a couple in the right age range — the voter file shows no other adults at the address, so we have no direct signal of children. Treat as a low-confidence lead worth a second pass before a mailer goes out.",
     T3: "Their kid is age 19–20 and may have already left home. This isn't a current senior — it's an adjacent lead.",
   };
 
@@ -1002,16 +1013,18 @@
     if (r.tier === "T1") {
       checks.push(["✓", `Voter file shows ${v17} resident${v17 === 1 ? "" : "s"} age 17–18`]);
     }
-    if (r.tier === "T2") {
+    if (r.tier === "T2" || r.tier === "T2c") {
       checks.push([adults4263 >= 2 ? "✓" : "—",
         `${adults4263} parent-age (42–63) adult${adults4263 === 1 ? "" : "s"} at address — need ≥ 2`]);
+      checks.push([(r.adult_count ?? 0) >= 3 ? "✓" : "—",
+        `${r.adult_count ?? 0} total adults at address — ≥ 3 is the "Family on File" gate (T2)`]);
       checks.push([(yrs ?? 0) >= 8 ? "✓" : "—",
         `${yrs ?? "?"} years owned — need ≥ 8`]);
       checks.push([r.mailing_same_as_situs ? "✓" : "—", "Owner-occupied"]);
       checks.push([r.institutional_owner ? "—" : "✓", "Non-institutional owner"]);
       if (v17 === 0) checks.push(["·", "No 17–18 voter at this address (would be T1)"]);
       if (r.owner_voter_review === "absentee_or_rental") {
-        checks.push(["—", "Reviewed: not owner-occupied (would otherwise be T2)"]);
+        checks.push(["—", "Reviewed: not owner-occupied (would otherwise be T2/T2c)"]);
       }
     }
     if (r.tier === "T3") {
