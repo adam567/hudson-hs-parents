@@ -47,7 +47,7 @@
     activeTagFilter: null,   // tag id, when filtering by a tag
     lastClickedIdx: -1,
     filters: {
-      tiers: { T1: true, T2: true, T3: false, T4: false, T5: false },
+      tiers: { T1: true, T2: true, T2b: false, T3: false, T4: false, T5: false },
       cohorts: new Set(),
       minValue: null, maxValue: null,
       minYears: null, maxYears: null,
@@ -496,8 +496,8 @@
     return (av - bv) * sgn;
   }
 
-  const TIER_LABEL = { T1: "Current senior", T2: "Likely senior", T3: "Recent grad",
-                       T4: "Younger-sibling keeper", T5: "Weak inference" };
+  const TIER_LABEL = { T1: "Current senior", T2: "Likely senior", T2b: "Likely senior (inferred)",
+                       T3: "Recent grad", T4: "Younger-sibling keeper", T5: "Weak inference" };
 
   function drawList() {
     const sorted = state.visibleSet.slice().sort((a, b) => compareRows(a, b, state.sort.col, state.sort.dir));
@@ -683,6 +683,7 @@
   const TIER_RULE = {
     T1: "Voter file shows a 17- or 18-year-old at this address — a confirmed current senior.",
     T2: "Datazapp College-Bound match plus two parent-age adults (42–63) plus 8+ years at this address.",
+    T2b: "No Datazapp hit, no kid voter on file — but two parent-age adults (42–63), 8+ years owned, owner-occupied. Voter-pattern inference for an unregistered senior.",
     T3: "Voter file shows a 19- or 20-year-old at this address — recent grad, kid likely already left.",
     T4: "Datazapp match plus at least one parent-age adult, but missing the second-adult or tenure signals.",
     T5: "Datazapp College-Bound match only, with no corroborating voter or adult signals.",

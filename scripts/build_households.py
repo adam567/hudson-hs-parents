@@ -145,11 +145,22 @@ def main() -> None:
 
         owner_names = [n for n in [p.get("owner1_raw"), p.get("owner2_raw")] if n]
 
+        # Owner surname is the FIRST whitespace-token of owner1_raw — the Summit
+        # County parcel format is "LASTNAME FIRSTNAME [MIDDLE]". The previous
+        # implementation took split()[-1] which yielded the middle initial, "JR",
+        # or "LLC" instead of the surname.
+        owner_first_token = (p.get("owner1_raw") or "").split()[0].upper() if p.get("owner1_raw") else None
+        voter_surnames = {(v.get("last_name") or "").strip().upper() for v in vs if v.get("last_name")}
+        owner_surname_match = (
+            None if not owner_first_token or not voter_surnames
+            else (owner_first_token in voter_surnames)
+        )
         rows.append({
             "address_key": ak,
             "parcel_id": p["id"],
             "display_name": display_name_from_owner(p.get("owner1_raw"), p.get("owner2_raw")),
-            "surname_key": (p.get("owner1_raw") or "").split()[-1].upper() if p.get("owner1_raw") else None,
+            "surname_key": owner_first_token,
+            "owner_voter_surname_match": owner_surname_match,
             "owner_names": owner_names,
             "situs_address": p.get("situs_address"),
             "situs_city": p.get("situs_city"),

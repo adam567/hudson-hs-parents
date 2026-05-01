@@ -15,6 +15,8 @@
   --t1-ring: #d9a420;          /* gold ring */
   --t2: #c87423;              /* burnt orange */
   --t2-ring: #e3a95a;
+  --t2b: #d6a36a;             /* desaturated burnt orange — voter-only inference */
+  --t2b-ring: #ead0a0;
   --t3: #c69b3b;              /* amber */
   --t3-ring: #8a6822;
   --t4: #4a6a8c;              /* steel blue */
@@ -172,6 +174,7 @@ label[title] { cursor: help; }
 }
 .pin-preview.T1 { width: 14px; height: 14px; background: var(--t1); box-shadow: 0 0 0 2px var(--t1-ring), 0 0 0 3px rgba(0,0,0,0.15); }
 .pin-preview.T2 { width: 12px; height: 12px; background: var(--t2); box-shadow: 0 0 0 2px var(--t2-ring), 0 0 0 3px rgba(0,0,0,0.15); }
+.pin-preview.T2b { width: 11px; height: 11px; background: var(--t2b); box-shadow: 0 0 0 1.5px var(--t2b-ring), 0 0 0 2px rgba(0,0,0,0.12); opacity: 0.85; }
 .pin-preview.T3 { width: 11px; height: 11px; background: var(--t3); }
 .pin-preview.T4 { width: 10px; height: 10px; background: var(--t4); box-shadow: 0 0 0 2px var(--t4-ring); }
 .pin-preview.T5 { width: 9px;  height: 9px;  background: var(--t5); opacity: 0.7; }
@@ -248,6 +251,12 @@ label[title] { cursor: help; }
   width: 12px !important; height: 12px !important;
   background: var(--t2);
   box-shadow: 0 0 0 2px var(--t2-ring), 0 1px 3px rgba(0,0,0,0.3);
+}
+.marker-T2b {
+  width: 11px !important; height: 11px !important;
+  background: var(--t2b);
+  box-shadow: 0 0 0 1.5px var(--t2b-ring), 0 1px 2px rgba(0,0,0,0.22);
+  opacity: 0.85;
 }
 .marker-T3 {
   width: 11px !important; height: 11px !important;
@@ -432,6 +441,7 @@ label[title] { cursor: help; }
 }
 .tier-badge.T1 { background: var(--t1); }
 .tier-badge.T2 { background: var(--t2); }
+.tier-badge.T2b { background: var(--t2b); color: #1d1d1f; }
 .tier-badge.T3 { background: var(--t3); color: #1d1d1f; }
 .tier-badge.T4 { background: var(--t4); }
 .tier-badge.T5 { background: var(--t5); }
