@@ -318,6 +318,7 @@
 
   function applyDrawnArea(geo) {
     state.filters.drawnArea = geo;
+    state._closeSidebar?.();
     if (state.drawLayer) state.drawLayer.clearLayers();
     if (geo && geo.coordinates) {
       const ll = geo.coordinates[0].map(([lng, lat]) => [lat, lng]);
@@ -363,7 +364,7 @@
       state.prefs?.default_map_center_lng ?? -81.4407,
     ];
     const startZoom = state.prefs?.default_map_zoom ?? 13;
-    state.map = L.map("map", { zoomControl: true, preferCanvas: true }).setView(startCenter, startZoom);
+    state.map = L.map("map", { zoomControl: true, preferCanvas: true, tap: false }).setView(startCenter, startZoom);
     setBasemap(state.prefs?.default_basemap || "light");
     state.markerLayer = L.layerGroup().addTo(state.map);
     state.drawLayer = new L.FeatureGroup().addTo(state.map);
@@ -374,6 +375,22 @@
       clearTimeout(saveT);
       saveT = setTimeout(persistViewport, 800);
     });
+
+    // Keep Leaflet's measured size in sync with CSS layout changes:
+    // orientation flips, iOS address-bar collapse, sidebar overlay open/close,
+    // map ⇄ list view toggle. ResizeObserver covers most of these in one shot.
+    const mapEl = document.getElementById("map");
+    let invalT;
+    const requestInvalidate = () => {
+      clearTimeout(invalT);
+      invalT = setTimeout(() => {
+        if (state.map && !mapEl.hidden) state.map.invalidateSize();
+      }, 120);
+    };
+    if (window.ResizeObserver) new ResizeObserver(requestInvalidate).observe(mapEl);
+    window.addEventListener("orientationchange", requestInvalidate);
+    window.addEventListener("resize", requestInvalidate);
+    if (window.visualViewport) window.visualViewport.addEventListener("resize", requestInvalidate);
 
     // Leaflet.draw control
     state.drawControl = new L.Control.Draw({
@@ -426,9 +443,16 @@
     }
     state.visibleSet.forEach(r => {
       if (!r.lat || !r.lng) return;
-      const cls = `lead-marker marker-${r.tier}` +
-                  (state.firstLoad && r.tier === "T1" ? " first-load" : "");
-      const icon = L.divIcon({ className: cls, iconSize: null });
+      const innerCls = `lead-marker marker-${r.tier}` +
+                       (state.firstLoad && r.tier === "T1" ? " first-load" : "");
+      // 28x28 transparent wrapper gives fingers a real tap target while the
+      // inner span keeps the tier-specific 9–14px visual size.
+      const icon = L.divIcon({
+        className: "marker-hit",
+        html: `<span class="${innerCls}"></span>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+      });
       const m = L.marker([r.lat, r.lng], { icon });
       m.on("click", () => openDrawer(r.household_id));
       state.markerLayer.addLayer(m);
@@ -704,6 +728,7 @@
     const r = state.targets.find(x => x.household_id === id);
     if (!r) return;
     drawerHouseholdId = id;
+    state._closeSidebar?.();
     const tierLabel = TIER_LABEL[r.tier] || r.tier;
     $("#dTier").innerHTML = `<span class="pin-preview ${r.tier}"></span> Tier ${r.tier} · ${tierLabel} · ${r.evidence_score}`;
     $("#dName").textContent = r.display_name || "Unknown owner";
@@ -747,6 +772,26 @@
 
   // ── UI bindings ─────────────────────────────────────────────────────
   function bindUI() {
+    // Mobile filters drawer (off-canvas sidebar)
+    const sidebar = $("#sidebar");
+    const backdrop = $("#sidebarBackdrop");
+    const filtersToggleBtn = $("#filtersToggleBtn");
+    const openSidebar = () => {
+      sidebar.classList.add("open");
+      backdrop.classList.add("show");
+      filtersToggleBtn.setAttribute("aria-expanded", "true");
+    };
+    const closeSidebar = () => {
+      sidebar.classList.remove("open");
+      backdrop.classList.remove("show");
+      filtersToggleBtn.setAttribute("aria-expanded", "false");
+    };
+    filtersToggleBtn.addEventListener("click", () => {
+      sidebar.classList.contains("open") ? closeSidebar() : openSidebar();
+    });
+    backdrop.addEventListener("click", closeSidebar);
+    state._closeSidebar = closeSidebar;
+
     // Tabs
     $$(".sidebar-tabs .tab").forEach(t => t.addEventListener("click", () => {
       $$(".sidebar-tabs .tab").forEach(x => x.classList.remove("active"));
@@ -912,12 +957,13 @@
     $("#clearSelectionBtn").addEventListener("click", clearSelection);
     $("#closeTagModal").addEventListener("click", () => $("#tagModal").hidden = true);
 
-    // Esc closes drawer / settings / tag modal
+    // Esc closes drawer / settings / tag modal / mobile sidebar
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
       if (!$("#tagModal").hidden) { $("#tagModal").hidden = true; return; }
       if (!$("#drawer").hidden) { $("#drawer").hidden = true; return; }
       if (!$("#settingsModal").hidden) { $("#settingsModal").hidden = true; return; }
+      if ($("#sidebar").classList.contains("open")) { state._closeSidebar?.(); return; }
     });
   }
 

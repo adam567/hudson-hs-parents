@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex, nocache">
 <meta name="referrer" content="no-referrer">
 <title>Hudson HS Parents</title>
@@ -37,6 +37,8 @@
 
 <!-- ── App ── -->
 <section id="appView" hidden class="app-shell">
+
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
 
   <aside class="sidebar" id="sidebar">
 
@@ -186,6 +188,7 @@
 
   <main class="map-area">
     <div class="map-header card">
+      <button class="filters-toggle" id="filtersToggleBtn" aria-label="Show filters" aria-expanded="false">☰&nbsp;Filters</button>
       <div id="visibleCount" class="muted small">— households visible</div>
       <div class="view-toggle" role="tablist">
         <button class="vt active" data-view="map" role="tab" aria-selected="true">Map</button>
@@ -229,6 +232,7 @@
 
 <!-- Pin detail drawer -->
 <aside id="drawer" class="drawer" hidden>
+  <div class="drawer-handle" aria-hidden="true"></div>
   <div class="drawer-head">
     <div>
       <div class="drawer-tier" id="dTier"></div>
