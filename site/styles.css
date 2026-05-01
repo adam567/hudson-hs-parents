@@ -174,7 +174,7 @@ label[title] { cursor: help; }
 }
 .pin-preview.T1 { width: 14px; height: 14px; background: var(--t1); box-shadow: 0 0 0 2px var(--t1-ring), 0 0 0 3px rgba(0,0,0,0.15); }
 .pin-preview.T2 { width: 12px; height: 12px; background: var(--t2); box-shadow: 0 0 0 2px var(--t2-ring), 0 0 0 3px rgba(0,0,0,0.15); }
-.pin-preview.T2b { width: 11px; height: 11px; background: var(--t2b); box-shadow: 0 0 0 1.5px var(--t2b-ring), 0 0 0 2px rgba(0,0,0,0.12); opacity: 0.85; }
+.pin-preview.T2b { width: 10px; height: 10px; background: var(--t2b); box-shadow: 0 0 0 1.5px var(--t2b-ring), 0 0 0 2px rgba(0,0,0,0.12); opacity: 0.85; }
 /* T3 = adjacent leads (recent grads). Hollow rotated square so the eye reads
    "different category" before it reads color, including for colorblind users. */
 .pin-preview.T3 {
@@ -185,7 +185,7 @@ label[title] { cursor: help; }
   transform: rotate(45deg);
   box-shadow: none;
 }
-.pin-preview.T4 { width: 10px; height: 10px; background: var(--t4); box-shadow: 0 0 0 2px var(--t4-ring); }
+.pin-preview.T4 { width: 11px; height: 11px; background: var(--t4); box-shadow: 0 0 0 2px var(--t4-ring); }
 .pin-preview.T5 { width: 9px;  height: 9px;  background: var(--t5); opacity: 0.7; }
 
 /* Tier-toggle text column (label name + basis line) */
@@ -282,7 +282,8 @@ label[title] { cursor: help; }
   box-shadow: 0 0 0 2px var(--t2-ring), 0 1px 3px rgba(0,0,0,0.3);
 }
 .marker-T2b {
-  width: 11px !important; height: 11px !important;
+  /* Demoted below T4 in the priority reorder — was 11px, now 10px. */
+  width: 10px !important; height: 10px !important;
   background: var(--t2b);
   box-shadow: 0 0 0 1.5px var(--t2b-ring), 0 1px 2px rgba(0,0,0,0.22);
   opacity: 0.85;
@@ -298,7 +299,8 @@ label[title] { cursor: help; }
   box-shadow: 0 1px 2px rgba(0,0,0,0.18);
 }
 .marker-T4 {
-  width: 10px !important; height: 10px !important;
+  /* Promoted above T2b — was 10px, now 11px to match its rank-3 priority. */
+  width: 11px !important; height: 11px !important;
   background: var(--t4);
   box-shadow: 0 0 0 1.5px var(--t4-ring), 0 1px 2px rgba(0,0,0,0.2);
 }
@@ -420,6 +422,21 @@ label[title] { cursor: help; }
 }
 
 .dName-dot { display: inline-block; vertical-align: middle; margin-right: 6px; }
+
+/* Household roster (owners + voters) at the top of the drawer */
+.hh-roster { margin-bottom: 14px; }
+.hh-roster-sub { font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+.hh-roster-list { padding-left: 2px; }
+.hh-roster-list > div { padding: 2px 0; font-size: 14px; }
+.voter-row { display: flex; align-items: baseline; gap: 8px; padding: 2px 0; font-size: 14px; }
+.voter-row > :first-child { flex: 1; min-width: 0; }
+.voter-age { font-variant-numeric: tabular-nums; }
+.voter-tag {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 1px 6px; border-radius: 999px;
+}
+.voter-tag-senior { background: rgba(181,30,42,0.12); color: var(--t1); border: 1px solid var(--t1); }
+.voter-tag-grad   { background: rgba(198,155,59,0.14); color: var(--t3-ring); border: 1px solid var(--t3-ring); }
 
 .drawer-debug { margin-top: 18px; font-size: 12px; color: var(--muted); }
 .drawer-debug summary { cursor: pointer; padding: 4px 0; }

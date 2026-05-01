@@ -67,30 +67,57 @@ def fetch_active_campaign(user_id: str) -> dict | None:
     return rows[0] if rows else None
 
 
+TIER_LABEL = {
+    "T1":  "Confirmed Senior",
+    "T2":  "Likely Senior — List Match",
+    "T4":  "Possible Senior — List Match + Parent-Aged Voter",
+    "T2b": "Two Parent-Aged Adults — 8+ Years",
+    "T5":  "List Match",
+    "T3":  "Recent Grad",
+}
+TIER_LABEL_SHORT = {
+    "T1": "Confirmed", "T2": "List+2", "T4": "List+1",
+    "T2b": "2 voters/8+yr", "T5": "List only", "T3": "Recent grad",
+}
+TIER_RANK = {"T1": 1, "T2": 2, "T4": 3, "T2b": 4, "T5": 5, "T3": 6}
+DEFAULT_DIGEST_TIERS = ("T1", "T2", "T4", "T2b")
+
+
+def _sanitize(s: str) -> str:
+    return (s or "").replace("Datazapp College-Bound match", "matched a national college-bound parents list").replace("Datazapp", "the national parents list")
+
+
 def fetch_top_doors(campaign_id: str, since_iso: str | None) -> list[dict]:
-    """Tier 1/2/3 households not currently knocked or with cooldown expired."""
+    """Top households per priority tier (defaults to T1, T2, T4, T2b)."""
+    tier_filter = ",".join(DEFAULT_DIGEST_TIERS)
     r = sb_request("GET",
         "/v_targets?select=household_id,display_name,situs_address,situs_city,tier,evidence_score,why_sentence&"
-        "tier=in.(T1,T2,T3)&order=evidence_score.desc&limit=12")
+        f"tier=in.({tier_filter})&order=evidence_score.desc&limit=12")
     return r.json() or []
 
 
 def render_html(name: str, camp: dict, doors: list[dict]) -> str:
-    counts = {"T1": 0, "T2": 0, "T3": 0}
+    counts: dict[str, int] = {}
     for d in doors:
-        counts[d.get("tier", "T1")] = counts.get(d.get("tier"), 0) + 1
+        t = d.get("tier", "")
+        counts[t] = counts.get(t, 0) + 1
+    summary = " · ".join(
+        f"{TIER_LABEL_SHORT.get(code, code)}: {counts[code]}"
+        for code in sorted(counts, key=lambda t: TIER_RANK.get(t, 99))
+        if counts[code]
+    )
     rows = "".join(
         f'<tr><td style="padding:6px 8px;border-bottom:1px solid #e6e2d8"><strong>{d.get("situs_address") or "—"}</strong>'
         f'<br><span style="color:#6b6b70;font-size:12px">{d.get("display_name") or ""}</span></td>'
-        f'<td style="padding:6px 8px;border-bottom:1px solid #e6e2d8;font-weight:600">{d.get("tier")}</td>'
-        f'<td style="padding:6px 8px;border-bottom:1px solid #e6e2d8;color:#6b6b70;font-size:12px">{d.get("why_sentence") or ""}</td></tr>'
+        f'<td style="padding:6px 8px;border-bottom:1px solid #e6e2d8;font-weight:600">{TIER_LABEL.get(d.get("tier", ""), d.get("tier") or "—")}</td>'
+        f'<td style="padding:6px 8px;border-bottom:1px solid #e6e2d8;color:#6b6b70;font-size:12px">{_sanitize(d.get("why_sentence") or "")}</td></tr>'
         for d in doors
     )
     return f"""
     <div style="font:14px/1.5 -apple-system,Segoe UI,system-ui,sans-serif;color:#1d1d1f;max-width:600px">
       <h2 style="margin:0 0 6px">{camp['name']}</h2>
       <div style="color:#6b6b70;font-size:13px;margin-bottom:14px">
-        Anchor {camp['anchor_date']} · {len(doors)} top doors · T1: {counts['T1']} · T2: {counts['T2']} · T3: {counts['T3']}
+        Anchor {camp['anchor_date']} · {len(doors)} top doors · {summary}
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <tbody>{rows}</tbody>

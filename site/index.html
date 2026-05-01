@@ -8,7 +8,7 @@
 <title>Hudson HS Parents</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" crossorigin="">
-<link rel="stylesheet" href="styles.css?v=lex1">
+<link rel="stylesheet" href="styles.css?v=lex2">
 </head>
 <body>
 
@@ -66,18 +66,18 @@
 
       <section class="filter-section">
         <h3>Senior leads</h3>
-        <p class="muted small mb">Larger, brighter dots = stronger leads.</p>
-        <label class="tier-toggle"><input type="checkbox" data-tier="T1" checked> <span class="pin-preview T1"></span> <span class="tier-label-text"><span class="tier-name">Confirmed senior</span><span class="tier-basis muted small">A senior-age student is registered to vote here.</span></span> <span class="count" data-count="T1">—</span></label>
-        <label class="tier-toggle"><input type="checkbox" data-tier="T2" checked> <span class="pin-preview T2"></span> <span class="tier-label-text"><span class="tier-name">Likely senior — strong match</span><span class="tier-basis muted small">Matches a national parents list, plus the household pattern fits.</span></span> <span class="count" data-count="T2">—</span></label>
-        <label class="tier-toggle"><input type="checkbox" data-tier="T2b"> <span class="pin-preview T2b"></span> <span class="tier-label-text"><span class="tier-name">Likely senior — household pattern</span><span class="tier-basis muted small">Two parent-age adults, long tenure — but no list match. Inferred.</span></span> <span class="count" data-count="T2b">—</span></label>
-        <label class="tier-toggle"><input type="checkbox" data-tier="T4"> <span class="pin-preview T4"></span> <span class="tier-label-text"><span class="tier-name">Possible senior — partial match</span><span class="tier-basis muted small">Matches a national parents list, but missing a second adult or long tenure.</span></span> <span class="count" data-count="T4">—</span></label>
-        <label class="tier-toggle"><input type="checkbox" data-tier="T5"> <span class="pin-preview T5"></span> <span class="tier-label-text"><span class="tier-name">Possible senior — list match only</span><span class="tier-basis muted small">Matches a national parents list. Nothing else corroborates it.</span></span> <span class="count" data-count="T5">—</span></label>
+        <p class="muted small mb">Ordered by priority. Larger, brighter dots = stronger leads.</p>
+        <label class="tier-toggle"><input type="checkbox" data-tier="T1" checked> <span class="pin-preview T1"></span> <span class="tier-label-text"><span class="tier-name">Confirmed Senior</span><span class="tier-basis muted small">A senior-age student is registered to vote here.</span></span> <span class="count" data-count="T1">—</span></label>
+        <label class="tier-toggle"><input type="checkbox" data-tier="T2" checked> <span class="pin-preview T2"></span> <span class="tier-label-text"><span class="tier-name">Likely Senior — List Match</span><span class="tier-basis muted small">National parents list match plus two parent-age voters and 8+ years owned.</span></span> <span class="count" data-count="T2">—</span></label>
+        <label class="tier-toggle"><input type="checkbox" data-tier="T4"> <span class="pin-preview T4"></span> <span class="tier-label-text"><span class="tier-name">Possible Senior — List Match + Parent-Aged Voter</span><span class="tier-basis muted small">National parents list match plus at least one parent-age voter at this address.</span></span> <span class="count" data-count="T4">—</span></label>
+        <label class="tier-toggle"><input type="checkbox" data-tier="T2b"> <span class="pin-preview T2b"></span> <span class="tier-label-text"><span class="tier-name">Two Parent-Aged Adults — 8+ Years</span><span class="tier-basis muted small">No list match, but two parent-age voters with long tenure. Inferred.</span></span> <span class="count" data-count="T2b">—</span></label>
+        <label class="tier-toggle"><input type="checkbox" data-tier="T5"> <span class="pin-preview T5"></span> <span class="tier-label-text"><span class="tier-name">List Match</span><span class="tier-basis muted small">National parents list only — list isn't always clean. Lower-confidence.</span></span> <span class="count" data-count="T5">—</span></label>
       </section>
 
       <section class="filter-section adjacent-section">
         <h3>Adjacent — recent graduates</h3>
         <p class="muted small mb">Their kid is age 19–20 and may have already left home. Off thesis — turn on if you want to widen the funnel.</p>
-        <label class="tier-toggle"><input type="checkbox" data-tier="T3"> <span class="pin-preview T3"></span> <span class="tier-label-text"><span class="tier-name">Recent grad — adjacent</span><span class="tier-basis muted small">A 19- or 20-year-old is registered to vote here.</span></span> <span class="count" data-count="T3">—</span></label>
+        <label class="tier-toggle"><input type="checkbox" data-tier="T3"> <span class="pin-preview T3"></span> <span class="tier-label-text"><span class="tier-name">Recent Grad</span><span class="tier-basis muted small">A 19- or 20-year-old is registered to vote here.</span></span> <span class="count" data-count="T3">—</span></label>
       </section>
 
       <section class="filter-section">
@@ -299,7 +299,7 @@
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="app.js?v=lex1"></script>
+<script src="app.js?v=lex2"></script>
 
 </body>
 </html>
