@@ -8,7 +8,7 @@
 <title>Hudson HS Parents</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" crossorigin="">
-<link rel="stylesheet" href="styles.css?v=lex2">
+<link rel="stylesheet" href="styles.css?v=lex3">
 </head>
 <body>
 
@@ -120,6 +120,12 @@
             <option value="only">only owner lives here</option>
             <option value="exclude">exclude — mail goes elsewhere</option>
           </select>
+        </label>
+        <label class="tier-toggle entity-toggle"><input type="checkbox" id="filterIncludeEntities">
+          <span class="tier-label-text">
+            <span class="tier-name">Include unresolved entity-owned</span>
+            <span class="tier-basis muted small">Trusts/LLCs with no resident on the voter file. Hidden by default — extra research before knocking.</span>
+          </span>
         </label>
       </section>
 
@@ -299,7 +305,7 @@
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="app.js?v=lex2"></script>
+<script src="app.js?v=lex3"></script>
 
 </body>
 </html>

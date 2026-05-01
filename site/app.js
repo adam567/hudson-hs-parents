@@ -57,6 +57,11 @@
       mailingMode: "",
       search: "",
       drawnArea: null,           // {type:'Polygon', coordinates:[[[lng,lat],...]]}
+      // Entity-owned households (trusts, LLCs) where voter records DON'T
+      // resolve a natural-person resident: hidden by default. The agent
+      // doesn't want to walk up to "South Family Revocable Trust" with no
+      // idea who lives there. Toggle in Property to surface them.
+      includeUnresolvedEntities: false,
     },
     map: null,
     markerLayer: null,
@@ -130,6 +135,12 @@
     if (!state.prefs?.adjacent_leads_intro_dismissed_at) {
       const intro = $("#adjacentIntro");
       if (intro) intro.hidden = false;
+    }
+    // Apply persisted entity-owner toggle.
+    if (state.prefs?.include_unresolved_entities === true) {
+      state.filters.includeUnresolvedEntities = true;
+      const cb = $("#filterIncludeEntities");
+      if (cb) cb.checked = true;
     }
   }
 
@@ -264,6 +275,7 @@
     if (f.adultCount === "3" && (r.adult_count ?? 0) < 3) return false;
     if (f.mailingMode === "only" && !r.mailing_same_as_situs) return false;
     if (f.mailingMode === "exclude" && r.out_of_hudson_mailing) return false;
+    if (!f.includeUnresolvedEntities && isInstitutionalOwner(r) && !hasResidentMatch(r)) return false;
     if (f.search) {
       const hay = [r.display_name, r.situs_address, ...(r.owner_names || [])].filter(Boolean).join(" ").toLowerCase();
       if (!hay.includes(f.search)) return false;
@@ -576,6 +588,71 @@
     return now.getFullYear() - Number(by) - (beforeCutoff ? 1 : 0);
   }
 
+  // Most family trusts ("SOUTH FAMILY REVOCABLE TRUST", "JOHNSON FAMILY LLC")
+  // are held for the benefit of the parents who actually live there. When the
+  // parcel's legal owner is an entity but adult voters are registered at the
+  // address, treat those voters as the de-facto owners and demote the entity
+  // name to a small "Legal title" disclosure.
+  function isInstitutionalOwner(r) {
+    return !!r && r.institutional_owner === true;
+  }
+  function hasResidentMatch(r) {
+    return Array.isArray(r?.resident_names) && r.resident_names.length > 0;
+  }
+  // Effective owner names for display. Returns:
+  //   { primary: "Firstname Lastname", all: ["Firstname Lastname", ...],
+  //     legalTitleNote: string|null, isResolvedEntity: bool }
+  function effectiveOwners(r) {
+    const inst = isInstitutionalOwner(r);
+    if (inst && hasResidentMatch(r)) {
+      return {
+        primary: r.resident_names[0],
+        all: r.resident_names.slice(),
+        legalTitleNote: titleCase(r.display_name || ""),
+        isResolvedEntity: true,
+      };
+    }
+    if (inst) {
+      // Unresolved entity — no voter at address. Show the entity name; agent
+      // will see the "needs research" caveat in the modal.
+      return {
+        primary: titleCase(r.display_name || "Entity-owned (no resident on file)"),
+        all: (r.owner_names || []).map(n => flipOwnerName(n, true)),
+        legalTitleNote: null,
+        isResolvedEntity: false,
+      };
+    }
+    // Natural-person owner — flip "LASTNAME FIRSTNAME" → "Firstname Lastname".
+    return {
+      primary: flipOwnerName(r.display_name, false),
+      all: (r.owner_names || []).map(n => flipOwnerName(n, false)),
+      legalTitleNote: null,
+      isResolvedEntity: false,
+    };
+  }
+  // Last-first format for the table column, derived from a "Firstname Lastname"
+  // resident_names entry. Splits on the LAST whitespace so multi-word given
+  // names ("Mary Beth Heginbotham") become "Heginbotham Mary Beth".
+  function lastFirstFromFirstLast(name) {
+    if (!name) return "";
+    const s = String(name).trim();
+    const i = s.lastIndexOf(" ");
+    if (i <= 0) return s;
+    return `${s.slice(i + 1)} ${s.slice(0, i)}`;
+  }
+  function tableOwnerCell(r) {
+    if (isInstitutionalOwner(r) && hasResidentMatch(r)) {
+      // Substitute the resident; tag with ⓘ so she sees this is a derived name.
+      const flipped = lastFirstFromFirstLast(r.resident_names[0]);
+      const more = r.resident_names.length > 1 ? ` <span class="muted small">+${r.resident_names.length - 1}</span>` : "";
+      return `${escape(flipped)}<span class="owner-derived" title="Owner is an entity (${escape(r.display_name || "")}); shown name is the eldest adult registered to vote at this address.">ⓘ</span>${more}`;
+    }
+    if (isInstitutionalOwner(r)) {
+      return `<span class="muted">${escape(titleCase(r.display_name || ""))}</span><span class="owner-entity-tag" title="Entity-owned, no resident on voter file.">entity</span>`;
+    }
+    return escape(r.display_name || "—");
+  }
+
   function drawList() {
     const sorted = state.visibleSet.slice().sort((a, b) => compareRows(a, b, state.sort.col, state.sort.dir));
     state.listOrder = sorted;     // ordered by current sort, used for shift-click range
@@ -590,7 +667,7 @@
         return `
         <tr data-id="${r.household_id}" data-idx="${i}" class="${checked ? "selected" : ""}">
           <td class="check-col"><input type="checkbox" class="row-cb" ${checked ? "checked" : ""}></td>
-          <td class="owner">${escape(r.display_name || "—")}</td>
+          <td class="owner">${tableOwnerCell(r)}</td>
           <td class="addr">${escape(r.situs_address || "—")}</td>
           <td><span class="tier-badge ${r.tier}" title="${escape(TIER_LABEL[r.tier] || "")}">${escape(TIER_BADGE[r.tier] || r.tier)}</span></td>
           <td class="num">${r.market_value != null ? "$" + Math.round(r.market_value).toLocaleString() : "—"}</td>
@@ -891,16 +968,25 @@
     drawerHouseholdId = id;
     state._closeSidebar?.();
 
-    // Drawer head: identity-only. Pin dot + owner name (flipped to First Last)
-    // + address. The adjacent-pill renders only for T3.
+    // Drawer head: identity-only. Pin dot + owner name (resident-substituted
+    // for entity-owned) + address. The adjacent-pill renders only for T3.
     const tierKey = r.tier;
     const isAdjacent = tierKey === "T3";
-    const headName = flipOwnerName(r.display_name, r.institutional_owner) || "Unknown owner";
+    const eff = effectiveOwners(r);
+    // Up to two names in the head ("John South & Mary South"); the rest live
+    // in the Household roster section below.
+    const headPrimary = eff.all.slice(0, 2).join(" & ") || eff.primary || "Unknown owner";
     $("#dTier").innerHTML = isAdjacent
       ? `<span class="adjacent-pill">Adjacent — recent grad</span>`
       : "";
-    $("#dName").innerHTML = `<span class="pin-preview ${tierKey} dName-dot"></span>${escape(headName)}`;
-    $("#dAddr").textContent = `${r.situs_address || "—"}${r.situs_city ? ", " + r.situs_city : ""} ${r.situs_zip || ""}`;
+    $("#dName").innerHTML = `<span class="pin-preview ${tierKey} dName-dot"></span>${escape(headPrimary)}`;
+    const addrLine = `${r.situs_address || "—"}${r.situs_city ? ", " + r.situs_city : ""} ${r.situs_zip || ""}`;
+    const legalTitleHtml = eff.legalTitleNote
+      ? `<div class="muted small legal-title">Legal title: ${escape(eff.legalTitleNote)}</div>`
+      : (isInstitutionalOwner(r) && !hasResidentMatch(r)
+          ? `<div class="muted small legal-title legal-title-unresolved">Entity-owned · no resident on voter file</div>`
+          : "");
+    $("#dAddr").innerHTML = `${escape(addrLine)}${legalTitleHtml}`;
 
     // Conviction banner — verdict + basis. The whole modal pivots on this.
     const cls = tierKey.toLowerCase();
@@ -944,12 +1030,14 @@
       [`<span title="County-assessed market value from the Summit County fiscal office. Reflects the most recent reappraisal, not a current real-estate appraisal or asking price; actual sale prices typically run higher.">Market value (est.)</span>`, fmt$(r.market_value), true],
     ];
 
-    // Owners formatted Firstname Lastname for the modal (table column stays
-    // last-first). When two owners exist we want both surfaced — agent often
-    // recognizes whole families.
-    const ownerList = (r.owner_names || [])
-      .map(o => `<div class="muted small">${escape(flipOwnerName(o, r.institutional_owner))}</div>`)
-      .join("");
+    // Owners on record — rendered as "Firstname Lastname" (table stays
+    // last-first; modal flips for natural reading). When the legal owner is
+    // an entity, treat the resident voters as the owners and add a small
+    // "Legal title" line for full disclosure.
+    const ownerSubLabel = eff.isResolvedEntity ? "Owners (residents on voter file)" : "Owners on record";
+    const ownerList = eff.all.length
+      ? eff.all.map(o => `<div class="muted small">${escape(o)}</div>`).join("")
+      : `<div class="muted small">—</div>`;
 
     // Engineer-only debug disclosure (collapsed by default).
     const debugChecks = derivationForDebug(r).map(([mark, txt]) =>
@@ -972,8 +1060,9 @@
 
       <div class="section-h">Household</div>
       <div class="hh-roster">
-        <div class="hh-roster-sub muted small">Owners on record</div>
-        <div class="hh-roster-list">${ownerList || "<div class='muted small'>—</div>"}</div>
+        <div class="hh-roster-sub muted small">${escape(ownerSubLabel)}</div>
+        <div class="hh-roster-list">${ownerList}</div>
+        ${eff.legalTitleNote ? `<div class="muted small legal-title-roster">Legal title on parcel: ${escape(eff.legalTitleNote)}</div>` : ""}
         <div class="hh-roster-sub muted small" style="margin-top:8px">Registered to vote at this address</div>
         <div class="hh-roster-list" id="dVoterList"><div class="muted small">Loading…</div></div>
       </div>
@@ -1087,6 +1176,19 @@
     $("#filterMailing").addEventListener("change", () => {
       state.filters.mailingMode = $("#filterMailing").value; render();
     });
+    const entitiesCb = $("#filterIncludeEntities");
+    if (entitiesCb) {
+      entitiesCb.addEventListener("change", () => {
+        state.filters.includeUnresolvedEntities = entitiesCb.checked;
+        if (state.prefs && state.user) {
+          state.prefs.include_unresolved_entities = entitiesCb.checked;
+          supabase.from("user_preferences")
+            .update({ include_unresolved_entities: entitiesCb.checked })
+            .eq("user_id", state.user.id);
+        }
+        render();
+      });
+    }
     $("#filterSearch").addEventListener("input", () => {
       state.filters.search = $("#filterSearch").value.trim().toLowerCase();
       debouncedRender();
