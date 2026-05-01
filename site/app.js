@@ -612,14 +612,14 @@
     if (i <= 0) return s;
     return `${s.slice(i + 1)} ${s.slice(0, i)}`;
   }
-  // First-name only for the parent columns. Skips middle initials. For
-  // entity-owned parcels with resolved residents, reads from resident_names;
-  // otherwise from the parcel's owner_names ("LASTNAME FIRSTNAME [MIDDLE]").
+  // First-name only for the parent columns. Skips middle initials.
+  //
+  // Source priority: resident_names (voter file, eldest first) > owner_names
+  // (parcel title). The parcel often records only owner1, so most households
+  // have NULL for owner_names[1] — the voter file is what fills in Parent 2.
   function parentFirstName(r, idx) {
-    if (isInstitutionalOwner(r) && hasResidentMatch(r)) {
-      const name = r.resident_names[idx];
-      if (!name) return "";
-      const parts = String(name).trim().split(/\s+/);
+    if (hasResidentMatch(r) && r.resident_names[idx]) {
+      const parts = String(r.resident_names[idx]).trim().split(/\s+/);
       return parts[0] || "";
     }
     const raw = (r.owner_names || [])[idx];
@@ -629,17 +629,33 @@
     return titleCase(parts[1]);  // second token = first name; drops middle/suffix
   }
 
-  function tableOwnerCell(r) {
-    if (isInstitutionalOwner(r) && hasResidentMatch(r)) {
-      // Substitute the resident; tag with ⓘ so she sees this is a derived name.
-      const flipped = lastFirstFromFirstLast(r.resident_names[0]);
-      const more = r.resident_names.length > 1 ? ` <span class="muted small">+${r.resident_names.length - 1}</span>` : "";
-      return `${escape(flipped)}<span class="owner-derived" title="Owner is an entity (${escape(r.display_name || "")}); shown name is the eldest adult registered to vote at this address.">ⓘ</span>${more}`;
+  // Surname only for the Owner column — Parent 1 already shows the first name,
+  // so duplicating it in Owner just bloats the row.
+  function surnameFor(r) {
+    if (hasResidentMatch(r)) {
+      const n = r.resident_names[0];
+      const i = String(n).lastIndexOf(" ");
+      return i > 0 ? n.slice(i + 1) : n;
     }
-    if (isInstitutionalOwner(r)) {
+    if (isInstitutionalOwner(r)) return null;  // unresolved entity — caller falls back
+    const raw = (r.owner_names || [])[0] || r.display_name || "";
+    const parts = String(raw).trim().split(/\s+/);
+    return parts.length ? titleCase(parts[0]) : "";
+  }
+
+  function tableOwnerCell(r) {
+    // Unresolved entity: keep the entity treatment so the agent sees the
+    // legal-title oddity directly in the row (these are mostly hidden by the
+    // default filter, but visible when she opts in).
+    if (isInstitutionalOwner(r) && !hasResidentMatch(r)) {
       return `<span class="muted">${escape(titleCase(r.display_name || ""))}</span><span class="owner-entity-tag" title="Entity-owned, no resident on voter file.">entity</span>`;
     }
-    return escape(r.display_name || "—");
+    const surname = surnameFor(r) || "—";
+    if (isInstitutionalOwner(r)) {
+      // Resolved entity — surname comes from the voter at the address.
+      return `${escape(surname)}<span class="owner-derived" title="Owner is an entity (${escape(r.display_name || "")}); surname taken from the voter file at this address.">ⓘ</span>`;
+    }
+    return escape(surname);
   }
 
   function drawList() {
@@ -680,6 +696,10 @@
       senior_score: "senior signal",
       datazapp_hit: "list match",
       tier: "lead",
+      display_name: "owner",
+      parent_1: "parent 1",
+      parent_2: "parent 2",
+      situs_address: "address",
     };
     const sortLabel = sortLabelMap[state.sort.col] || state.sort.col.replace(/_/g, " ");
     $("#listToolbar").textContent = `${sorted.length.toLocaleString()} households · sorted by ${sortLabel} (${state.sort.dir})`;
